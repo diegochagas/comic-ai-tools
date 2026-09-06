@@ -4,7 +4,8 @@ including huge scans (5000-10000 px) with tiny print, by running the
 comic-text-detector ONNX model at several scales/tiles and merging the boxes.
 
 Usage: python detect_blocks.py <out_dir> <image> [<image>...] [--tile 2048]
-                               [--min-tile 1024] [--no-fullpage]
+                               [--min-tile 1024] [--no-fullpage] [--apply-exif]
+                               [--upright-dir <dir>]
 
 For each page writes into <out_dir>/detect/:
   <stem>_detect.json   {"source", "size", "text_blocks": [[x,y,w,h], ...]}
@@ -209,12 +210,15 @@ def merge_boxes(boxes):
     return boxes
 
 
-def detect_page(sess, path, out_dir, tile, min_tile, fullpage):
+def detect_page(sess, path, out_dir, tile, min_tile, fullpage, apply_exif=False, upright_dir=None):
     stem = os.path.splitext(os.path.basename(path))[0]
-    # IGNORE_ORIENTATION: work on the raw pixel grid. Scanner JPEGs sometimes
-    # carry a bogus EXIF rotation; the raw grid is what PSD builders that
-    # ignore EXIF (and what PIL) see, so all box coords stay consistent.
-    img = cv2.imread(path, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+    # Default: IGNORE_ORIENTATION, i.e. work on the raw pixel grid. Scanner
+    # JPEGs sometimes carry a bogus EXIF rotation; the raw grid is what PSD
+    # builders that ignore EXIF (and what PIL) see, so all box coords stay
+    # consistent.  --apply-exif instead rotates to the orientation the tag
+    # asks for (what image viewers/Photoshop show) and uses THAT grid.
+    flags = cv2.IMREAD_COLOR if apply_exif else (cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION)
+    img = cv2.imread(path, flags)
     if img is None:
         raise RuntimeError(f"cannot read {path}")
     h, w = img.shape[:2]
@@ -223,10 +227,12 @@ def detect_page(sess, path, out_dir, tile, min_tile, fullpage):
     if has_exif_rotation(path):
         # node-canvas applies EXIF; give the PSD builder an EXIF-free copy
         # with the same pixel grid the boxes were measured on (lossless PNG)
-        source_for_psd = os.path.join(out_dir, f"{stem}_upright.png")
+        source_for_psd = os.path.join(upright_dir or out_dir, f"{stem}_upright.png")
+        os.makedirs(os.path.dirname(source_for_psd), exist_ok=True)
         if not os.path.exists(source_for_psd):
             cv2.imwrite(source_for_psd, img, [cv2.IMWRITE_PNG_COMPRESSION, 1])
-        print(f"{stem}: EXIF orientation tag present -> wrote EXIF-free copy {source_for_psd}")
+        print(f"{stem}: EXIF orientation tag present -> wrote EXIF-free copy {source_for_psd}"
+              + (" (EXIF rotation applied)" if apply_exif else " (raw grid)"))
     all_boxes = []
     passes = []
     manual_path = os.path.join(out_dir, f"{stem}_manual.json")
@@ -311,13 +317,17 @@ def main():
     ap.add_argument("--tile", type=int, default=2048)
     ap.add_argument("--min-tile", type=int, default=1024)
     ap.add_argument("--no-fullpage", action="store_true")
+    ap.add_argument("--apply-exif", action="store_true",
+                    help="honour the EXIF orientation tag (work on the displayed orientation) instead of the raw grid")
+    ap.add_argument("--upright-dir", default=None,
+                    help="where to write <stem>_upright.png copies (default: <out_dir>/detect); a local disk avoids cloud-sync churn on huge scans")
     a = ap.parse_args()
     out_dir = os.path.join(a.out_dir, "detect")
     sess = ort.InferenceSession(MODEL, make_session_options(), providers=["CPUExecutionProvider"])
     failed = []
     for p in a.images:
         try:
-            detect_page(sess, p, out_dir, a.tile, a.min_tile, not a.no_fullpage)
+            detect_page(sess, p, out_dir, a.tile, a.min_tile, not a.no_fullpage, a.apply_exif, a.upright_dir)
         except Exception as e:
             print(f"SKIP {p}: {e}")
             failed.append(p)

@@ -36,6 +36,9 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import inpaint_lama  # noqa: E402  (LaMa "generative fill" for busy surroundings)
+
 MODEL = os.path.join(os.path.dirname(__file__), "..", "models", "comictextdetector.pt.onnx")
 SIZE = 1024
 SEG_THRESH = 0.3
@@ -46,7 +49,7 @@ MIN_AREA = 24          # drop specks
 RING_IN, RING_OUT = 3, 10   # background sampling ring around a component
 COLOR_TOL = 22         # max per-pixel color distance from the ring's median color
 PLAIN_FRAC = 0.90      # fraction of ring pixels within COLOR_TOL for a solid fill
-INPAINT_RADIUS = 4     # cv2.inpaint sampling radius for busy surroundings
+INPAINT_RADIUS = 4     # cv2.inpaint radius (fallback when LaMa model is missing)
 BLK_CONF = 0.4         # min confidence for a text block box
 BLK_IOU = 0.4          # NMS threshold for text block boxes
 BLK_PAD = 8            # px padding around each text block box
@@ -149,7 +152,7 @@ def detect_page(sess, path, out_dir):
         # stroke-like false positives on art stay untouched
         inside = allow[y:y + bh, x:x + bw][labels[y:y + bh, x:x + bw] == i]
         if (inside > 0).mean() < BLK_OVERLAP:
-            skip_tint[labels == i] = 255
+            skip_tint[y:y + bh, x:x + bw][labels[y:y + bh, x:x + bw] == i] = 255
             skipped += 1
             continue
         # background ring around this component, computed on a padded crop,
@@ -164,19 +167,23 @@ def detect_page(sess, path, out_dir):
         uniform = (bg.size > 0 and
                    (np.linalg.norm(bg - median, axis=1) <= COLOR_TOL).mean() >= PLAIN_FRAC)
         comp_out = {"bbox": [int(x), int(y), int(bw), int(bh)], "area": int(area)}
+        sel = comp > 0     # bbox-slice ops only: full-page `labels == i` OOMs on huge scans
         if uniform:
             comp_out["method"] = "fill"
-            cleaned[labels == i] = median.round().clip(0, 255).astype(np.uint8)
-            fill_tint[labels == i] = 255
+            cleaned[y0:y1, x0:x1][sel] = median.round().clip(0, 255).astype(np.uint8)
+            fill_tint[y0:y1, x0:x1][sel] = 255
             b, g, r = median.round().astype(int).clip(0, 255)
             comp_out["bg_color"] = f"#{r:02x}{g:02x}{b:02x}"
         else:
             comp_out["method"] = "inpaint"
-            inpaint_mask[labels == i] = 255
+            inpaint_mask[y0:y1, x0:x1][sel] = 255
         comps.append(comp_out)
 
+    del labels
     if inpaint_mask.any():
-        cleaned = cv2.inpaint(cleaned, inpaint_mask, INPAINT_RADIUS, cv2.INPAINT_TELEA)
+        # busy surroundings: LaMa inpainting (models/lama_fp32.onnx) when
+        # available, cv2.inpaint (Telea) otherwise. Solid fills above untouched.
+        cleaned = inpaint_lama.inpaint(cleaned, inpaint_mask, inplace=True)
 
     cv2.imwrite(os.path.join(out_dir, f"{stem}_mask.png"), fill_tint | inpaint_mask)
     cleaned_path = os.path.join(out_dir, f"{stem}_cleaned.png")
@@ -193,7 +200,8 @@ def detect_page(sess, path, out_dir):
     out = {"source": os.path.abspath(path), "size": [w, h],
            "text_mask": os.path.join(out_dir, f"{stem}_mask.png"),
            "cleaned": cleaned_path, "text_blocks": blocks,
-           "components": comps, "skipped_non_text": skipped}
+           "components": comps, "skipped_non_text": skipped,
+           "inpaint_method": inpaint_lama.method_name()}
     with open(os.path.join(out_dir, f"{stem}_detect.json"), "w") as f:
         json.dump(out, f, indent=1)
     print(f"{stem}: {len(blocks)} text blocks, {len(comps)} components erased "

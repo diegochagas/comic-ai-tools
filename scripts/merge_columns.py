@@ -24,6 +24,9 @@ import os
 import cv2
 
 
+COL_W = 130   # max width (page px) of a single vertical text column; --col-width
+
+
 def is_col(b): return b[3] > 2.5 * b[2]
 def is_line(b): return b[2] > 2.5 * b[3]
 
@@ -33,7 +36,7 @@ def overlap(a0, a1, b0, b1):
 
 
 def kind(b):
-    if b[2] <= 130 and b[3] >= 1.2 * b[2]:
+    if b[2] <= COL_W and b[3] >= 1.2 * b[2]:
         return "col"
     if is_line(b):
         return "line"
@@ -53,7 +56,7 @@ def can_merge(a, b, ka, kb, ca, cb):
         # more than a column) and sharing most of their height
         side = -cw <= hgap <= 1.6 * cw and vo >= 0.6
         # two fragments of ONE column (both still single-column wide)
-        stacked = aw <= 130 and bw <= 130 and hgap <= 0 and vgap <= 1.5 * cw
+        stacked = aw <= COL_W and bw <= COL_W and hgap <= 0 and vgap <= 1.5 * cw
         # a column group sitting right under / over another one whose x-range
         # contains it (columns interrupted by a photo)
         inside = (ax >= bx - cw and ax + aw <= bx + bw + cw) or (bx >= ax - cw and bx + bw <= ax + aw + cw)
@@ -120,7 +123,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("detect_json", nargs="+")
     ap.add_argument("--width", type=int, default=1000)
+    ap.add_argument("--col-width", type=int, default=COL_W,
+                    help="max page-px width of one vertical text column (raise for big scans: ~300 at 600 dpi)")
     a = ap.parse_args()
+    globals()["COL_W"] = a.col_width
     for p in a.detect_json:
         d = json.load(open(p))
         raw = d["text_blocks"]

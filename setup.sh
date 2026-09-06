@@ -26,6 +26,16 @@ if [ ! -f "$MODEL_PATH" ]; then
 fi
 echo "model ready: $MODEL_PATH"
 
+# LaMa inpainting model ("generative fill" for text erased over art; solid
+# backgrounds never use it). ONNX export, Apache-2.0, runs on CPU.
+LAMA_URL="https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx"
+LAMA_PATH="models/lama_fp32.onnx"
+if [ ! -f "$LAMA_PATH" ]; then
+    echo "Downloading LaMa inpainting model (~208 MB)..."
+    curl -L --fail -o "$LAMA_PATH" "$LAMA_URL"
+fi
+echo "inpainting model ready: $LAMA_PATH"
+
 mkdir -p "$TESSDATA_DIR"
 for f in $TESSDATA_FILES; do
     if [ ! -f "$TESSDATA_DIR/$f" ]; then

@@ -18,8 +18,12 @@ it:
 
 - surroundings are one plain color (white/black bubbles, grey caption boxes,
   colored banners...) → filled with that exact sampled color;
-- surroundings are busy (art, screentone, gradients) → inpainted from the
-  surrounding pixels (results over art are imperfect by nature).
+- surroundings are busy (art, screentone, gradients) → AI-inpainted with
+  **LaMa** (`models/lama_fp32.onnx`, via `scripts/inpaint_lama.py`) — a
+  Photoshop-generative-fill-like reconstruction of hatching, screentone and
+  line art under the text. Falls back to `cv2.inpaint` (Telea) if the model
+  file is missing or `INPAINT=telea` is set. Only masked pixels are replaced;
+  results over art are still imperfect by nature.
 
 **Restoration is manual by design** (user decision, 2026-08-26, superseding the
 earlier leave-text-over-art policy): if the automated erase damaged something
@@ -57,6 +61,10 @@ Division of labor:
   plus pillow/pymupdf/psd-tools for the standalone tools in `tools/`).
 - Model: `<skill>/models/comictextdetector.pt.onnx` (re-download from
   manga-image-translator GitHub release `beta-0.3` if missing).
+- Inpainting model: `<skill>/models/lama_fp32.onnx` (208 MB, from
+  huggingface `Carve/LaMa-ONNX`; `setup.sh` downloads it). Optional — without
+  it busy-background erases use OpenCV Telea inpainting. ~3–4 s per 512 px
+  patch on 2 CPU cores; a page with many SFX over art takes 1–3 min.
 - Node.js + `<skill>/node_modules/ag-psd` and `pngjs` (installed by
   `setup.sh`; run it again if `node_modules` is missing).
 - Scripts: `<skill>/scripts/detect_text.py`, `<skill>/scripts/gimp_clean.py`,

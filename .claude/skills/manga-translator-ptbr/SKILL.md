@@ -179,6 +179,14 @@ compactness limits so dense catalogue pages don't fuse into one blob.
   an EXIF-free `<stem>_upright.png` is written next to the json and
   recorded as `source_for_psd` - use THAT as the PSD source, otherwise
   node-canvas applies the rotation and the boxes land on the wrong grid.
+  When the tag is *correct* (a book scanned sideways, e.g. the 7008x10208
+  Saint Seiya CLAMP doujinshi spreads tagged orientation 6), pass
+  `--apply-exif` so the whole pipeline works in the displayed orientation
+  (the PSD then opens upright, like the JPEG does in a viewer). For 71 MP
+  scans the upright PNG is ~60-100 MB each: `--upright-dir /local/disk`
+  keeps them out of a cloud-synced output folder (they are regenerable).
+- `merge_columns.py --col-width N`: max width of one vertical text column.
+  Default 130 px suits ~2000 px pages; use ~300 for 600 dpi scans.
 
 ### B2. Review and fix the blocks
 
@@ -363,9 +371,15 @@ block it unions the page-scale stroke segmentation with a crop-scale pass
 (large display text is lost at page scale) and, when the block sits on a
 uniform background, fills every pixel that differs from the sampled
 background colour - which catches stylised titles the model misses. Each
-component is then filled with the sampled surrounding colour, or inpainted
-when the surroundings are busy. `<stem>_clean_overlay.jpg` tints what was
-touched (red = fill, green = inpaint) - check it before building.
+component is then filled with the sampled surrounding colour (exact solid
+fill - white/black/grey/red... backgrounds are never AI-touched), or, when
+the surroundings are busy (art, screentone, hatching), **AI-inpainted with
+LaMa** (`scripts/inpaint_lama.py`, model `models/lama_fp32.onnx`, downloaded
+by `setup.sh`) - the equivalent of Photoshop's generative fill for text over
+drawings. Without the model file (or with `INPAINT=telea`) it falls back to
+`cv2.inpaint`. `<stem>_clean_overlay.jpg` tints what was touched (red = solid
+fill, green = inpainted) - check it before building. The detect json records
+`inpaint_method` (`lama`/`telea`).
 
 Run the whole folder in chunks: detect+clean is ~15-25 s/page on 2 cores and
 a shell call may be capped at ~3 min, so loop 5-8 pages per call with a
@@ -379,3 +393,35 @@ will skip the broken page. Fix the json, then rebuild that page explicitly.
 
 Timings from the 117-page Shurato art book (2026-09-04): detect+merge+clean
 ~45 min total, 1011 text boxes, PSDs ~40 MB each (4.9 GB for the book).
+
+### Big-scan folder run (2026-09-05/06, 138-page 7008x10208 CLAMP Saint Seiya doujinshi)
+
+What worked for a 71 MP/page book inside a sandbox whose shell calls are
+capped at ~3 min and whose background processes are killed between calls:
+
+- `scripts/run_detect_round.sh` and `scripts/run_build_round.sh` are
+  time-boxed, resumable rounds: call them repeatedly until they print
+  `ALL DONE`. `run_build_round.sh` runs, per page, `ensure_upright.py`
+  (recreates the EXIF-rotated PNG that was deleted to save disk) ->
+  `assemble_translation.py` -> `clean_blocks.py --budget N` (LaMa pass stops
+  at the deadline and saves `<stem>_pending_mask.png`; the next call resumes
+  only the leftover regions) -> `build_translated_psd.mjs` -> verify ->
+  `preview_psd_text.py`, then copies the PSD to the output folder and marks
+  `final/<stem>.ok`. Use `PAGES="stem1 stem2"` to redo specific pages.
+- `scripts/page_views.py <stem>_merged.json <dir>` renders the page as 2
+  strips at 1400 px with the block numbers and a ruler in OVERLAY units -
+  legible enough to read handwritten doujinshi text and to measure `add` /
+  `box` rectangles directly. This replaced zooming per block.
+- `clean_blocks.py` gained: `--budget`, a colour-cluster fallback (k-means on
+  the box when the model's stroke mask covers < 1 % or > 40 % of a non-plain
+  box: white/coloured display titles over paintings and gradients), an
+  either-polarity ink refinement (light text on dark art is kept), and the
+  edge-touching-component rule for plain boxes (hatching/speed lines that
+  run through a box are no longer wiped). `CLEAN_DEBUG=1` prints per-box
+  coverage and writes `debug_mask.png`.
+- Timings on 2 CPU cores: detect ~35 s/page, clean 1.5-3 min/page (LaMa),
+  build+verify ~20 s; PSDs 110-330 MB each (30 GB for the book). Mounted
+  output folders may forbid deleting files: overwrite with `cp -f` instead.
+- Translation files with a merged index that is neither in `texts` nor in
+  `drop` produce an EMPTY text layer and `verify` fails the page - scan for
+  those before building (see the check in the session log).
