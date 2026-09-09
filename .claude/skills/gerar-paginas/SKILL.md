@@ -27,14 +27,15 @@ in credits to Diego's Higgsfield Plus plan (1000 credits/month).
 2. Read `projects/<project>/project.json` for formats.
 3. Check the credit balance: `higgsfield account status`. Warn Diego if the
    balance is under 100 credits; stop and ask if under 40.
-4. Models & real credit costs (verified 2026-08-08 on the Plus plan, 1000
+4. Models & real credit costs (verified 2026-09-09 on the Plus plan, 1000
    credits/month):
-   - **`nano_banana_pro` — 2 credits/gen — the default.** Best exact-text
-     rendering + up to 14 image references, `aspect_ratio 2:3`,
-     `resolution 2k`.
+   - **`gpt_image_2_5` at `quality low` / `resolution 2k` — 2 credits/gen —
+     the default.** Strong exact-text rendering, up to 14 image references,
+     `aspect_ratio 2:3`. Bump `--quality` to `medium` (2.5 credits) or `high`
+     (5.5 credits) only if a page keeps failing on text/detail fidelity.
    - `nano_banana_flash` (Nano Banana 2) — 1.5 credits — fallback / cheap
      reroll when the failure was layout (not text).
-   - Do NOT use `gpt_image_2` (7 credits) or any video model.
+   - Do NOT use `gpt_image_2` (the older model, 7 credits) or any video model.
    - Full-issue budget check: 30 pages × ~2.5 attempts × 2 credits ≈ 150
      credits per issue. If the remaining balance can't cover the requested
      batch, tell Diego before generating.

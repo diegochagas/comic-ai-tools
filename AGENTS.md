@@ -47,10 +47,13 @@ official skills in `.agents/skills/`) page by page with a visual QC + reroll
 loop. Codex is the orchestrator and QC reviewer; there is NO Codex API
 usage.
 
-Cost rules (apply to every project) — real credit costs, verified 2026-08-08:
-- Plus plan = 1000 credits/month. `nano_banana_pro` = 2 credits/gen (default),
-  `nano_banana_flash` = 1.5 (cheap reroll). NEVER `gpt_image_2` (7 credits)
-  or video models. One issue ≈ 150 credits including rerolls.
+Cost rules (apply to every project) — real credit costs, verified 2026-09-09:
+- Plus plan = 1000 credits/month. `gpt_image_2_5` at `quality low` /
+  `resolution 2k` = 2 credits/gen (default) — bump `--quality` to `medium`
+  (2.5) or `high` (5.5) only if a page keeps failing on text/detail fidelity.
+  `nano_banana_flash` = 1.5 (cheap layout-only reroll). NEVER `gpt_image_2`
+  (the older model, 7 credits) or video models. One issue ≈ 150 credits
+  including rerolls.
 - Max 3 generation attempts per page, then flag `needs_review` for Diego.
 - Check `higgsfield account status` before each batch; warn under 100 credits.
 

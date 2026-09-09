@@ -60,9 +60,9 @@ def main():
 
     with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as tf:
         tf.write(prompt); pf = tf.name
-    cmd = [HF, 'generate', ('cost' if cost_only else 'create'), 'nano_banana_pro',
+    cmd = [HF, 'generate', ('cost' if cost_only else 'create'), 'gpt_image_2_5',
            '--prompt', f'@{pf}' if False else prompt,
-           '--aspect_ratio', aspect, '--resolution', '2k', '--json']
+           '--aspect_ratio', aspect, '--resolution', '2k', '--quality', 'low', '--json']
     for r in reflist:
         cmd += ['--image-references', r]
     if not cost_only:
