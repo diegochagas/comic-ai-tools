@@ -13,7 +13,7 @@ if [ ! -d venv ]; then
     venv/bin/pip install --quiet --upgrade pip
 fi
 # manga-translator-ptbr: onnxruntime opencv numpy pillow | pdf-psd-convert: pymupdf psd-tools pillow
-# japanese-ocr-translate: pillow deep-translator | generate-comic-page: pillow opencv numpy | image-utils, comic-archive: pillow
+# japanese-ocr-translate: pillow deep-translator | generate-comic-page, clean-texts: pillow opencv numpy | image-utils, comic-archive: pillow
 venv/bin/pip install --quiet onnxruntime opencv-python-headless numpy \
     pillow pymupdf "psd-tools[composite]" deep-translator
 echo "venv ready: $(venv/bin/python -c 'import onnxruntime; print("onnxruntime", onnxruntime.__version__)')"

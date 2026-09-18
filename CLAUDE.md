@@ -6,7 +6,9 @@ a symlink, as `AGENTS.md` (Codex). The README's table lists every skill and
 its scripts; read a skill's `SKILL.md` before running any of its scripts.
 
 Skills: `generate-comic-page` (AI comic studio, one reviewed page at a time), `manga-translator-ptbr` (scans →
-letter-ready or PT-BR translated PSD/XCF files), `comic-downloader`
+letter-ready or PT-BR translated PSD/XCF files), `clean-texts` (Higgsfield
+text eraser: textless PNG copies, every pixel outside the erased text restored
+from the original; the agent QCs each result), `comic-downloader`
 (pattern-based page downloads from JSON site profiles), `comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
 (CLI wrappers that pick flags from the request). `.claude/skills/` and
 `.agents/skills/` contain symlinks to those folders; the `higgsfield-*`
