@@ -18,7 +18,6 @@ sites/
   dorothee/download.config.json      Dorothee Magazine profile (issues 484–539, pages 35–38)
   dorothee/reference/                saved page sources the profile was derived from
   example/download.config.json       starting point for a new website
-downloads/                           default output of the bundled profiles (gitignored)
 ```
 
 ## Run
@@ -34,7 +33,7 @@ node comic-downloader/scripts/download.cjs --config path/to/download.config.json
 | Flag | Meaning |
 | --- | --- |
 | `-s`, `--site <name>` | use `sites/<name>/download.config.json` (default: `dorothee`) |
-| `-c`, `--config <path>` | use a profile anywhere on disk (`outputDir` resolves relative to it) |
+| `-c`, `--config <path>` | use a profile anywhere on disk (`outputDir` still resolves under `~/Downloads`) |
 | `--dry-run` | print `url -> path` for every target, download nothing |
 | `--overwrite` | replace existing files (default: skip them; `overwriteExisting: true` in the profile does the same) |
 
@@ -65,16 +64,17 @@ Numbered image paths:
 Grouped galleries, issues or collections:
 
 ```json
-{ "baseUrl": "https://example.com/assets", "outputDir": "../../downloads/my-site",
+{ "baseUrl": "https://example.com/assets", "outputDir": "my-site",
   "itemFolderTemplate": "{slug}",
   "items": [ { "id": "summer", "slug": "summer-gallery" }, { "id": "winter", "slug": "winter-gallery" } ],
   "downloads": [ { "name": "gallery-pages", "pages": { "from": 1, "to": 5 },
                    "urlPathTemplate": "{slug}/image-{page}.jpg" } ] }
 ```
 
-`outputDir` is resolved relative to the config file. From
-`sites/my-site/download.config.json`, `../../downloads/my-site` writes into
-the skill-level `downloads/` folder.
+`outputDir` is a folder under `~/Downloads` (`COMIC_OUTPUT_DIR` replaces that
+root): `"my-site"` writes into `~/Downloads/my-site/`. Omitted, it defaults to
+the profile's folder name. An absolute path or one starting with `~/` is used
+as is.
 
 ### Config fields
 

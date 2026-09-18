@@ -7,7 +7,11 @@ description: Turn PDFs into per-page JPG images (any DPI, one folder per PDF or 
 
 Two scripts in `pdf-psd-convert/scripts/`. Run them with the repo venv
 (`<repo>/venv/bin/python`, created by `<repo>/setup.sh`; it has PyMuPDF,
-Pillow and psd-tools). `<repo>` is the comic-ai-tools checkout.
+Pillow and psd-tools). `<repo>` is the comic-skills checkout.
+
+**Where results go:** `~/Downloads` (`COMIC_OUTPUT_DIR` replaces that root;
+`--output <dir>` names an exact destination when the user asks for one).
+The source folder is never written to.
 
 | Script | What it does | Needs |
 | --- | --- | --- |
@@ -21,11 +25,11 @@ folder if omitted, so always pass it):
 
 | The user says... | Flags |
 | --- | --- |
-| "extract the pages" | none — `<folder>/<PdfName>/0001.jpg ...`, one folder per PDF, 150 DPI |
+| "extract the pages" | none — `~/Downloads/<folder name>/<PdfName>/0001.jpg ...`, one folder per PDF, 150 DPI |
 | "high resolution", "for print", "sharp", "big scans" | `--dpi 300` (or the number they give) |
 | "quick preview", "small", "thumbnails" | `--dpi 72` |
-| "everything in one folder", "single folder", "merge all PDFs" | `--single-folder` → `<folder>/<folder_name>/<PdfName>_0001.jpg` |
-| ...and names a destination | `--single-folder --output <dir>` (`--output` is only valid with `--single-folder`) |
+| "everything in one folder", "single folder", "merge all PDFs" | `--single-folder` → `~/Downloads/<folder name>/<PdfName>_0001.jpg` |
+| names a destination | `--output <dir>` (both modes; with `--single-folder --overwrite` that folder is emptied first) |
 | "redo", "replace", "overwrite" | `--overwrite` (otherwise existing output folders are skipped) |
 
 Duplicate PDFs whose names differ only by extra `.pdf` suffixes are
@@ -35,7 +39,7 @@ de-duplicated to the shortest name.
 
 | The user says... | Flags |
 | --- | --- |
-| "convert / flatten these PSDs" | none — output to a sibling folder `<source folder> JPG`, saved composite, white matte |
+| "convert / flatten these PSDs" | none — output to `~/Downloads/<source folder name> JPG/`, saved composite, white matte |
 | names an output folder | `--output <dir>` |
 | "black background", a matte color | `--background <color>` (any Pillow color name / hex) |
 | "hidden layers too", "everything visible", "show all layers", "the composite is stale" | `--show-all-layers` (recomposites with every layer/group on; slower) |
@@ -49,7 +53,7 @@ files keep their ICC profile; RGB profiles are converted to sRGB.
 ## Examples
 
 ```bash
-<repo>/venv/bin/python pdf-psd-convert/scripts/pdf_to_images.py "/path/to/pdfs" --dpi 300
+<repo>/venv/bin/python pdf-psd-convert/scripts/pdf_to_images.py "/path/to/pdfs" --dpi 300                # -> ~/Downloads/pdfs/<PdfName>/
 <repo>/venv/bin/python pdf-psd-convert/scripts/pdf_to_images.py "/path/to/pdfs" --single-folder --output "/path/to/all-images"
 <repo>/venv/bin/python pdf-psd-convert/scripts/psd_to_jpg.py "/path/to/psd-files" --show-all-layers
 <repo>/venv/bin/python pdf-psd-convert/scripts/psd_to_jpg.py "/path/to/psd-files" --background black --limit 5

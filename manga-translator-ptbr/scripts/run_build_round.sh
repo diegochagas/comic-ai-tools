@@ -7,13 +7,16 @@
 # exists, and clean_blocks saves a pending mask when the budget runs out, so a
 # page can span several shell calls.
 #
-#   OUT=<out dir with detect/ and tr/> WORK=<local scratch dir> [BUDGET=150] \
+#   OUT=<out dir with detect/ and tr/ - the one run_detect_round.sh used,
+#   ~/Downloads/<images dir name> by default> [WORK=<OUT>/work] [BUDGET=150] \
 #   [FORMAT=psd|xcf] [PAGES="stem1 stem2"] manga-translator-ptbr/scripts/run_build_round.sh
 # FORMAT=xcf builds <OUT>/<stem>.xcf with native GIMP text layers via
 # build_translated_xcf.py (headless flatpak GIMP; it verifies by reloading
 # the file and renders the preview itself) instead of the PSD.
 set -u
 cd "$(dirname "$0")"   # manga-translator-ptbr/scripts
+OUT=${OUT:?set OUT=<out dir with detect/ and tr/>}
+WORK=${WORK:-$OUT/work}
 BUDGET=${BUDGET:-150}
 FORMAT=${FORMAT:-psd}
 start=$(date +%s)

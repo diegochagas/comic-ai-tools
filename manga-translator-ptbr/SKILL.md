@@ -42,7 +42,7 @@ dialogue, writing natural PT-BR that fits a balloon — is done by you
 
 ## Paths
 
-`<repo>` is the comic-ai-tools checkout (the folder holding `setup.sh`). This
+`<repo>` is the comic-skills checkout (the folder holding `setup.sh`). This
 skill's scripts live in `<repo>/manga-translator-ptbr/scripts/`; every command
 below is written relative to `<repo>`. Python scripts run with
 `<repo>/venv/bin/python` (onnxruntime, opencv, numpy, pillow); Node scripts
@@ -54,6 +54,19 @@ busy-background erases fall back to OpenCV Telea). The venv comes from
 `<repo>/setup.sh`, the rest from `<skill>/setup.sh` (which the root one runs).
 PSDs are written by ag-psd (no GIMP). XCF output needs flatpak GIMP 3
 (`org.gimp.GIMP`; `GIMP_CMD` env for another launcher).
+
+**Where results go: `~/Downloads/<source folder name>/`** - the `<out_dir>`
+/ `OUT` / `OUT_DIR` of every command below (`COMIC_OUTPUT_DIR` replaces
+`~/Downloads` as the root; the `run_*_round.sh` scripts default to it).
+PSDs/XCFs sit at its top level, with `preview/`, `detect/`, `tr/` or
+`translations/`, `final/` and `work/` (scratch: upright PNGs, tiles) beside
+them. Never write into the source folder: scans stay untouched, and source
+folders usually live in a syncing cloud drive that races fresh writes.
+Mode A, which edits PSDs that already exist, works on COPIES: copy the
+PSDs into `~/Downloads/<their folder name>/` first (`cp -n`, so a resumed
+run keeps its progress) and run every `set_text_layers.mjs` /
+`add_and_fill_text_layers.mjs` / `run_apply_round.sh` call on those copies.
+Use another location only when the user names one.
 
 ## Output format: PSD by default, XCF only on request
 
@@ -113,7 +126,7 @@ context font (the log line says so; the letterer changes the font in GIMP).
 - `annotate_text_boxes.py <image> <layers.json> <out.png>` — draws numbered
   boxes from a `list_layers.mjs` dump over the page, 2x, to match layer
   indices to balloons by eye.
-- `run_apply_round.sh` — `IMG_DIR=<images> [OUT_DIR=<images>/psd]`; applies
+- `run_apply_round.sh` — `IMG_DIR=<images> [OUT_DIR=~/Downloads/<images dir name>]`; applies
   `<OUT_DIR>/translations/<stem>.json` to `<OUT_DIR>/<stem>.psd` for every
   page not yet marked `.applied`, resumable.
 
@@ -133,6 +146,8 @@ context font (the log line says so; the letterer changes the font in GIMP).
 
 ## Workflow per page
 
+0. Work on the copy of the PSD in `~/Downloads/<its folder name>/` (see
+   "Paths"), never on the user's original.
 1. Run `list_layers.mjs` on the PSD. Note the source raster layer(s) and the
    text layers (position + current placeholder text).
 2. Find the original-language source for this page. If you have a manifest
@@ -213,14 +228,14 @@ reviewed/merged boxes, that is Mode B with placeholder text (run
 `build_translated_psd.mjs ... --placeholder` on a merged/assembled blocks json).
 
 Inputs: a **source folder** of images (jpg/jpeg/png) - ask if not given;
-**output dir**, default `<source>/psd` (PSDs there, previews in
-`<out>/preview/`, detection artifacts in `<out>/detect/`); optional page
-subset.
+**output dir**, default `~/Downloads/<source folder name>/` (PSDs there,
+previews in `<out>/preview/`, detection artifacts in `<out>/detect/`);
+optional page subset.
 
 ### C1. Whole folder, resumable (the normal way)
 
 ```bash
-SRC=<images dir> [OUT=<images dir>/psd] [FORMAT=psd|xcf] [BUDGET=500] [PAGES="010 011"] manga-translator-ptbr/scripts/run_letter_round.sh
+SRC=<images dir> [OUT=~/Downloads/<images dir name>] [FORMAT=psd|xcf] [BUDGET=500] [PAGES="010 011"] manga-translator-ptbr/scripts/run_letter_round.sh
 ```
 
 Call it repeatedly until it prints `ALL DONE` (it stops starting new pages
@@ -277,10 +292,10 @@ Photoshop notes: the font is referenced by PostScript name only (no font
 data embedded) - a machine without CCWildWords-Regular substitutes a
 fallback with a missing-font warning, editability unaffected. Photoshop
 shows a one-time "update text layer" prompt per box the first time it is
-touched; normal for programmatically written text layers. If `<out_dir>` is
-inside a syncing cloud folder (Nextcloud, Dropbox) the sync client can race
-a fresh write and revert it within seconds - verify a moment after writing,
-or write to a local path first.
+touched; normal for programmatically written text layers. The default
+`<out_dir>` under `~/Downloads` is local; if the user names one inside a
+syncing cloud folder (Nextcloud, Dropbox) the sync client can race a fresh
+write and revert it within seconds - verify a moment after writing.
 
 ---
 
@@ -348,8 +363,9 @@ compactness limits so dense catalogue pages don't fuse into one blob.
   Saint Seiya CLAMP doujinshi spreads tagged orientation 6), pass
   `--apply-exif` so the whole pipeline works in the displayed orientation
   (the PSD then opens upright, like the JPEG does in a viewer). For 71 MP
-  scans the upright PNG is ~60-100 MB each: `--upright-dir /local/disk`
-  keeps them out of a cloud-synced output folder (they are regenerable).
+  scans the upright PNG is ~60-100 MB each: `--upright-dir <out_dir>/work/up`
+  keeps them in the scratch folder (they are regenerable; the round
+  scripts delete them as they go).
 - `merge_columns.py --col-width N`: max width of one vertical text column.
   Default 130 px suits ~2000 px pages; use ~300 for 600 dpi scans.
 

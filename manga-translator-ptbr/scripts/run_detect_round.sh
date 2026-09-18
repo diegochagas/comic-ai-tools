@@ -3,10 +3,13 @@
 # Re-run until it prints "ALL DONE" (each shell call is capped by the tool
 # timeout, so this stops starting new pages after $BUDGET seconds).
 #
-#   SRC=<images dir> OUT=<out dir> UP=<upright png dir> [BUDGET=500] \
+#   SRC=<images dir> [OUT=~/Downloads/<images dir name>] [UP=<OUT>/work/up] [BUDGET=500] \
 #   [COLW=300] [MINTILE=2048] manga-translator-ptbr/scripts/run_detect_round.sh
 set -u
 cd "$(dirname "$0")"   # manga-translator-ptbr/scripts
+SRC=${SRC:?set SRC=<folder with the page images>}
+OUT=${OUT:-${COMIC_OUTPUT_DIR:-$HOME/Downloads}/$(basename "$(cd "$SRC" && pwd)")}
+UP=${UP:-$OUT/work/up}
 BUDGET=${BUDGET:-500}; COLW=${COLW:-300}; MINTILE=${MINTILE:-2048}
 start=$(date +%s); n=0
 for img in "$SRC"/*.jpg "$SRC"/*.jpeg "$SRC"/*.png; do

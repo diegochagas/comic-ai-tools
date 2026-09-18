@@ -1,7 +1,7 @@
 {
   "siteName": "Dorothee Magazine",
   "baseUrl": "https://dorotheemagazine.fr/_media/img/xlarge",
-  "outputDir": "../../downloads/dorothee",
+  "outputDir": "dorothee",
   "overwriteExisting": false,
   "monthNames": [
     "Janvier",

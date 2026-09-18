@@ -1,52 +1,33 @@
 #!/usr/bin/env python3
 """Split a project's per-issue prompt scripts into per-page job files.
 
-Generic over projects: each project lives in gerar-paginas/projects/<name>/ with a
-project.json describing its scripts, page-header pattern and reference rules.
+Generic over projects: each project lives in ~/Downloads/<name>/ (or
+$COMIC_PROJECTS_DIR/<name>/, or any folder passed to -p) with a project.json
+describing its scripts, page-header pattern and reference rules.
 
-Each job file (gerar-paginas/projects/<p>/jobs/<issue>/page_NN.json) contains:
+Each job file (<project>/jobs/<issue>/page_NN.json) contains:
   - the full page prompt text (verbatim from the script)
   - the shared preamble of the issue (base style, model-sheet instructions)
   - which model sheets to attach (resolved via the project's charmap.json)
   - which style reference pages to attach
+  - the page kind (cover / editorial / story)
   - a list of exact dialogue strings that must appear on the page (QC)
 
 Also creates/refreshes work/<issue>/state.json (never overwrites page statuses
 that already exist).
 
-Usage: python3 gerar-paginas/scripts/split_scripts.py [--project NAME] [issues...]
+Usage: python3 generate-comic-page/scripts/split_scripts.py [--project NAME|PATH] [issues...]
 """
 import argparse
 import json
 import re
 import sys
-import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import resolve_project
+from common import load_charmap, no_sheet_chars, page_kind, resolve_project, resolve_sheets
 
 DIALOG_RE = re.compile(r"[\"“]([^\"”]{2,400})[\"”]")
-
-
-def strip_accents(s: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
-
-
-def resolve_sheets(charmap: dict, page_text: str) -> list[str]:
-    text = strip_accents(page_text).upper()
-    sheets: list[str] = []
-    for entry in charmap.get("map", []):
-        if any(strip_accents(k).upper() in text for k in entry["keywords"]):
-            for s in entry["sheets"]:
-                if s not in sheets:
-                    sheets.append(s)
-    return sheets
-
-
-def no_sheet_chars(charmap: dict, page_text: str) -> list[str]:
-    text = strip_accents(page_text).upper()
-    return [c for c in charmap.get("no_sheet_characters", []) if strip_accents(c).upper() in text]
 
 
 def extract_dialogue(page_text: str) -> list[str]:
@@ -58,10 +39,10 @@ def extract_dialogue(page_text: str) -> list[str]:
     return out
 
 
-def style_refs_for(cfg: dict, page_no: int) -> list[str]:
+def style_refs_for(cfg: dict, kind: str) -> list[str]:
     rules = cfg.get("style_refs", {})
-    if page_no == 1 and "cover" in rules:
-        return rules["cover"]
+    if kind in rules:                      # "cover" / "editorial" specific anchors
+        return rules[kind]
     return rules.get("default", [])
 
 
@@ -96,15 +77,17 @@ def split_issue(pdir: Path, cfg: dict, charmap: dict, issue: str) -> None:
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[m.start():end].strip().strip("-").strip()
 
+        kind = page_kind(cfg, page_no, title)
         job = {
             "issue": issue,
             "page": page_no,
             "title": title,
+            "kind": kind,
             "preamble": preamble,
             "prompt": body,
             "model_sheets": resolve_sheets(charmap, body),
             "no_sheet_characters": no_sheet_chars(charmap, body),
-            "style_refs": style_refs_for(cfg, page_no),
+            "style_refs": style_refs_for(cfg, kind),
             "dialogue_exact": extract_dialogue(body),
             "aspect": cfg.get("aspect", "2:3"),
             "lettering": cfg.get("lettering", "ai"),
@@ -128,7 +111,6 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     name, cfg, pdir = resolve_project(args.project)
-    charmap_path = pdir / "charmap.json"
-    charmap = json.loads(charmap_path.read_text(encoding="utf-8")) if charmap_path.exists() else {}
+    charmap = load_charmap(pdir)
     for issue in (args.issues or [str(i) for i in cfg["issues"]]):
         split_issue(pdir, cfg, charmap, str(issue))

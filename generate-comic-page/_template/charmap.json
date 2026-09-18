@@ -1,0 +1,7 @@
+{
+  "_comment": "keywords: accent-insensitive, uppercase substring match against the page script — most specific entries first. sheets: files in refs/model-sheets/. description: what the agent SAW on the sheet (hair, eyes, each outfit piece + colour, emblems; every member of a group) — injected into the prompt as the character design lock.",
+  "map": [
+    { "keywords": ["HERO NAME"], "sheets": ["hero.png"], "description": "Hero Name is ... (replace this entry)" }
+  ],
+  "no_sheet_characters": []
+}

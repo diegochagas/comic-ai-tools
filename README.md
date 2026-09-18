@@ -1,7 +1,8 @@
-# comic-ai-tools
+# comic-skills
 
 Diego's agent skills for making and working with comics and manga: an AI
-comic studio (page scripts → AI-generated pages → `.cbz`), manga scans →
+comic studio (page scripts → AI-generated pages reviewed one by one, cover
+and editorial as editable GIMP `.xcf` → `.cbz`), manga scans →
 letter-ready or PT-BR-translated layered PSD/XCF files, a pattern-based
 page downloader, and small CLI skills for comic archives, PDF/PSD
 conversion, image batches and Japanese OCR.
@@ -27,15 +28,16 @@ deps for every skill), created by **`./setup.sh`**, which then runs every
 `<skill>/setup.sh`. Everything else a skill needs lives inside it: `node_modules/` from its own
 `package.json` (`manga-translator-ptbr`, `comic-downloader`),
 `manga-translator-ptbr/models/`, `japanese-ocr-translate/tessdata/` (all
-installed by `setup.sh`) and the comic projects in `gerar-paginas/projects/`
-— all gitignored by the root `.gitignore`. All commands in the skills are
-written relative to the repo root.
+installed by `setup.sh`, all gitignored by the root `.gitignore`). The AI
+comic projects of `generate-comic-page` live outside the repo, in
+`~/Downloads/<project>/`. All commands in the skills are written relative to
+the repo root.
 
 ## Skills
 
 | Skill | Scripts | What it does |
 | --- | --- | --- |
-| [`gerar-paginas`](gerar-paginas/) ([README](gerar-paginas/README.md)) | `split_scripts.py`, `status.py`, `make_lettering_guide.py`, `assemble_cbz.py`, `common.py`, `gen_page.py`, `batch_gen.sh`, `_template/` | AI comic studio: splits per-issue prompt scripts into page jobs, drives Higgsfield (`gpt_image_2_5`, ~2 credits/page) page by page with visual QC + reroll loop, writes the lettering guide, packs approved pages into `.cbz`. One project per `gerar-paginas/projects/<name>/` (currently `megaman-nam`). |
+| [`generate-comic-page`](generate-comic-page/) ([README](generate-comic-page/README.md)) | `new_project.py`, `import_refs.py`, `split_scripts.py`, `gen_page.py`, `make_layout.py`, `build_xcf.py`, `page_state.py`, `gimp_layout_job.py`, `status.py`, `make_lettering_guide.py`, `assemble_cbz.py`, `common.py`, `_template/` | AI comic studio, ONE page at a time with Diego approving each: imports a folder of character model-sheet examples (the agent writes a design description per character that locks every prompt), splits per-issue scripts into page jobs, generates a single TEXTLESS page through Higgsfield (`gpt_image_2_5`, empty balloons), self-QCs it, letters it for free — OpenCV finds the empty balloons, headless GIMP writes an `.xcf` with one native editable text box per balloon in CCWildWords — shows the lettered preview, then approves / applies the requested changes (single-change edits, rerolls, or free text-only layout edits) / imports more examples — and asks before generating the next page. Cover and editorial get their logo/title/body as text layers the same way. Every page's deliverable is an `.xcf`. Packs approved pages into `.cbz`. Projects live in `~/Downloads/<project>/`. |
 | [`manga-translator-ptbr`](manga-translator-ptbr/) ([README](manga-translator-ptbr/README.md)) | `detect_text.py`, `inpaint_lama.py`, `detect_blocks.py`, `merge_columns.py`, `overlay_tiles.py`, `block_sheets.py`, `page_views.py`, `assemble_translation.py`, `merge_translations.py`, `clean_blocks.py`, `ensure_upright.py`, `build_translated_psd.mjs`, `build_translated_xcf.py`, `gimp_xcf_job.py`, `verify_translated_psd.mjs`, `validate_psds.mjs`, `preview_psd_text.py`, `build_two_source_psd.mjs`, `list_layers.mjs`, `list_text_layers.mjs`, `export_layer.mjs`, `set_text_layers.mjs`, `add_and_fill_text_layers.mjs`, `scan_placeholders.mjs`, `annotate_text_boxes.py`, `run_letter_round.sh`, `run_detect_round.sh`, `run_build_round.sh`, `run_apply_round.sh`, `examples/` | Manga/doujinshi/art-book scans → layered PSDs (Photoshop text boxes) or XCFs (native GIMP text layers, via headless GIMP): `Original` + `Copy` with the text erased (solid fill on plain backgrounds, LaMa inpainting over art) + one editable Photoshop paragraph text box per block. Mode C leaves "Lorem ipsum" in CCWildWords for a human letterer, fully automatic. Mode B (any scan size, tiled detection for 7000×10000 pages with tiny print) has the agent review the boxes, merge Japanese columns into paragraphs and write the Brazilian Portuguese itself. Mode A fills the placeholder boxes of existing PSDs. ONNX detection + ag-psd; GIMP only for XCF output. |
 | [`comic-downloader`](comic-downloader/) ([README](comic-downloader/README.md)) | `download.cjs`, `sites/<name>/download.config.json` | Downloads comic/magazine page images whose URLs follow a pattern (numbered pages, issues with dates, galleries, URL lists) from JSON site profiles; dry-run first, skips existing files. Bundled profile: Dorothee Magazine. |
 | [`comic-archive`](comic-archive/) | `images_to_cbr.py`, `cbr_to_images.py` | Pack image folders into `.cbr`/`.cbz` (optional JPEG conversion, max height, quality) and unpack `.cbr`/`.cbz`/`.zip` archives (RAR via unrar/7z; `--first-only` for covers). The SKILL.md maps what the user asks for to the flags. |
@@ -62,9 +64,9 @@ this repo. To use them from anywhere, symlink the skill folders into the
 global directories, the same way:
 
 ```sh
-for s in gerar-paginas manga-translator-ptbr comic-downloader comic-archive pdf-psd-convert image-utils japanese-ocr-translate; do
+for s in generate-comic-page manga-translator-ptbr comic-downloader comic-archive pdf-psd-convert image-utils japanese-ocr-translate; do
   for h in ~/.claude/skills ~/.agents/skills ~/.codex/skills; do
-    mkdir -p "$h" && ln -sfn ~/Projects/comic-ai-tools/$s "$h/$s"
+    mkdir -p "$h" && ln -sfn ~/Projects/comic-skills/$s "$h/$s"
   done
 done
 ```
@@ -87,8 +89,8 @@ a newly added skill.
 ## Setup
 
 ```bash
-git clone <this repo> ~/Projects/comic-ai-tools
-cd ~/Projects/comic-ai-tools
+git clone <this repo> ~/Projects/comic-skills
+cd ~/Projects/comic-skills
 ./setup.sh     # shared venv + python deps, then every <skill>/setup.sh (node_modules, ONNX models, tessdata, GIMP/tesseract checks)
 ```
 
@@ -99,8 +101,9 @@ System requirements, by skill:
   for XCF output. The `CCWildWords-Regular` font on the machine that opens
   the files in Photoshop/GIMP.
 - `comic-downloader`: Node.js only.
-- `gerar-paginas`: the Higgsfield CLI logged in to a Higgsfield account
-  (Plus plan, 1000 credits/month).
+- `generate-comic-page`: the Higgsfield CLI logged in to a Higgsfield account
+  (Plus plan, 1000 credits/month); flatpak GIMP 3 and the `CCWildWords`
+  font visible to it (every page is delivered as an `.xcf`).
 - `japanese-ocr-translate`: `tesseract` on `PATH` (`sudo apt install tesseract-ocr`).
 - `comic-archive`: `unrar` or `7z` only for RAR-based `.cbr` files.
 
@@ -108,10 +111,26 @@ System requirements, by skill:
 
 `.gitignore` blocks `venv/`, every `node_modules/` and `package-lock.json`,
 `manga-translator-ptbr/models/`, `japanese-ocr-translate/tessdata/`,
-`gerar-paginas/projects/`, `comic-downloader/downloads/`, `tmp_worklists/`
-and `__pycache__/`. Generated comics, scans, downloads, PSDs and per-job
-scratch never go in the repo.
+`tmp_worklists/` and `__pycache__/`.
 
-Output folders inside a syncing cloud drive (Nextcloud, Dropbox) can race a
-fresh PSD write and revert it within seconds — verify a moment after
-writing, or write to a local path first.
+**Every skill writes its results to `~/Downloads`**, never into the repo and
+never into the source folder it was pointed at (scans, archives and PSDs
+stay untouched; rotating images no longer overwrites them). Two environment
+variables move everything: `COMIC_OUTPUT_DIR` replaces `~/Downloads` for the
+tool skills, `COMIC_PROJECTS_DIR` for `generate-comic-page` projects; each
+script also takes an explicit `--output` / `OUT=` when you want a specific
+place.
+
+| Skill | Default result location |
+| --- | --- |
+| `generate-comic-page` | `~/Downloads/<project>/` (`out/xcf/`, `out/*.cbz`) |
+| `manga-translator-ptbr` | `~/Downloads/<source folder name>/` (PSD/XCF + `preview/`, `detect/`, `work/`) |
+| `comic-downloader` | `~/Downloads/<profile outputDir>/` |
+| `comic-archive` | `~/Downloads/<folder>.cbr`, `~/Downloads/<folder>/<chapter>.cbr`; unpacked: `~/Downloads/<folder>/<archive>/` |
+| `pdf-psd-convert` | `~/Downloads/<folder>/<PdfName>/`; `~/Downloads/<folder> JPG/` |
+| `image-utils` | `~/Downloads/<folder> rotated <deg>/`, `~/Downloads/<folder> <W>x<H>/` |
+| `japanese-ocr-translate` | `~/Downloads/<folder>/japanese_transcription.txt` (+ `_pt_br.txt`) |
+
+If you point an output at a syncing cloud drive (Nextcloud, Dropbox)
+instead, the sync client can race a fresh PSD write and revert it within
+seconds — verify a moment after writing.

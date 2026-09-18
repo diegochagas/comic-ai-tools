@@ -10,14 +10,14 @@
 # timeout, so it stops starting new pages after $BUDGET seconds). Pages that
 # already have a PSD are skipped; a page with zero blocks still gets a PSD.
 #
-#   SRC=<images dir> [OUT=<images dir>/psd] [FORMAT=psd|xcf] [BUDGET=500] \
+#   SRC=<images dir> [OUT=~/Downloads/<images dir name>] [FORMAT=psd|xcf] [BUDGET=500] \
 #   [PAGES="stem1 stem2"] manga-translator-ptbr/scripts/run_letter_round.sh
 set -u
 cd "$(dirname "$0")"   # manga-translator-ptbr/scripts
 REPO="$(cd ../.. && pwd)"
 PY="$REPO/venv/bin/python"; [ -x "$PY" ] || PY=python3
 SRC=${SRC:?set SRC=<folder with the page images>}
-OUT=${OUT:-$SRC/psd}
+OUT=${OUT:-${COMIC_OUTPUT_DIR:-$HOME/Downloads}/$(basename "$(cd "$SRC" && pwd)")}   # results never go into the source folder
 BUDGET=${BUDGET:-500}
 FORMAT=${FORMAT:-psd}
 mkdir -p "$OUT/detect" "$OUT/preview"

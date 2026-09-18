@@ -4,9 +4,9 @@ in script order, with its context line (which usually names the speaker and
 balloon type). Use it side by side with the generated pages to add the text
 manually.
 
-Output: gerar-paginas/projects/<p>/out/lettering_<issue>.md
+Output: <project>/out/lettering_<issue>.md
 
-Usage: python3 gerar-paginas/scripts/make_lettering_guide.py [--project NAME] [issues...]
+Usage: python3 generate-comic-page/scripts/make_lettering_guide.py [--project NAME|PATH] [issues...]
 """
 import argparse
 import json

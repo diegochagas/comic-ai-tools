@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Assemble a project's approved pages into a .cbz.
 
-Reads gerar-paginas/projects/<p>/work/<issue>/approved/page_NN.(png|jpg|jpeg|webp),
+Reads <project>/work/<issue>/approved/page_NN.(png|jpg|jpeg|webp),
 normalizes each page to JPEG portrait (max height from project.json), names
 pages per the project's naming patterns, and zips them into
-gerar-paginas/projects/<p>/out/<cbz_name>.
+<project>/out/<cbz_name>.
 
-Usage: python3 gerar-paginas/scripts/assemble_cbz.py [--project NAME] <issue> [issues...]
+Usage: python3 generate-comic-page/scripts/assemble_cbz.py [--project NAME|PATH] <issue> [issues...]
 """
 import argparse
 import io

@@ -2,13 +2,18 @@
 """Extract PDF pages as JPG images.
 
 By default, each PDF in the target folder is rendered into its own image folder.
-Use --single-folder to render every PDF into one shared folder named after
-the source folder.
+Use --single-folder to render every PDF into one shared folder.
+
+Images are written under ~/Downloads ($COMIC_OUTPUT_DIR overrides the root,
+--output <dir> the exact destination), never into the folder of the PDFs:
+  default          ~/Downloads/<folder name>/<PdfName>/0001.jpg
+  --single-folder  ~/Downloads/<folder name>/<PdfName>_0001.jpg
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -49,9 +54,10 @@ def collect_pdfs(folder: Path) -> list[Path]:
     return sorted(seen.values(), key=lambda path: path.name.lower())
 
 
-def default_single_output_folder(folder: Path) -> Path:
-    """Return the default shared output folder for --single-folder."""
-    return folder / folder.name
+def default_output_folder(folder: Path) -> Path:
+    """~/Downloads/<folder name> (or $COMIC_OUTPUT_DIR/<folder name>)."""
+    root = Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads").expanduser()
+    return (root / folder.name).resolve()
 
 
 def prepare_output_folder(folder: Path, overwrite: bool) -> bool:
@@ -175,29 +181,22 @@ def process_folder(
         print(f"No PDF files found in: {folder}")
         return
 
-    if single_folder:
-        output_folder = (
-            Path(output).expanduser().resolve()
-            if output
-            else default_single_output_folder(folder)
-        )
-        if output_folder == folder:
-            print("ERROR: --output cannot be the same folder that contains the PDFs.")
-            sys.exit(1)
-        if not prepare_output_folder(output_folder, overwrite):
-            return
-    else:
-        output_folder = None
+    output_folder = Path(output).expanduser().resolve() if output else default_output_folder(folder)
+    if output_folder == folder:
+        print("ERROR: --output cannot be the same folder that contains the PDFs.")
+        sys.exit(1)
+    if single_folder and not prepare_output_folder(output_folder, overwrite):
+        return
 
     total = len(pdf_files)
     print(f"Found {total} PDF file(s) in: {folder}")
-    print(f"DPI: {dpi} | Mode: {'single folder' if single_folder else 'one folder per PDF'}")
+    print(f"DPI: {dpi} | Mode: {'single folder' if single_folder else 'one folder per PDF'} | Output: {output_folder}")
     print("=" * 60)
 
     results = []
     for index, pdf in enumerate(pdf_files, start=1):
         print(f"\n[{index}/{total}] {pdf.name}")
-        target_folder = output_folder if single_folder else folder / clean_stem(pdf)
+        target_folder = output_folder if single_folder else output_folder / clean_stem(pdf)
         result = render_pdf(
             pdf,
             target_folder,
@@ -250,7 +249,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         default=None,
-        help="Output folder for --single-folder (default: <folder>/<folder_name>)",
+        help="Output folder (default: ~/Downloads/<folder name>)",
     )
     return parser.parse_args()
 
@@ -260,9 +259,6 @@ def main() -> None:
 
     if args.dpi < 1:
         print("Error: --dpi must be greater than 0.")
-        sys.exit(1)
-    if args.output and not args.single_folder:
-        print("Error: --output can only be used with --single-folder.")
         sys.exit(1)
 
     folder = args.folder

@@ -8,9 +8,12 @@ description: Download comic/magazine page images from websites whose image URLs 
 One Node script, `comic-downloader/scripts/download.cjs`, plus one JSON
 profile per website in `comic-downloader/sites/<name>/download.config.json`.
 Needs `comic-downloader/node_modules` (axios; `comic-downloader/setup.sh`
-or `npm install` inside `comic-downloader/`, also run by `<repo>/setup.sh`). `<repo>` is the comic-ai-tools checkout; run
-everything from there. Files are written under the profile's `outputDir`
-(the bundled profiles use `<skill>/downloads/<site>/`, gitignored).
+or `npm install` inside `comic-downloader/`, also run by `<repo>/setup.sh`). `<repo>` is the comic-skills checkout; run
+everything from there. Files are written to `~/Downloads/<outputDir>/`
+(`COMIC_OUTPUT_DIR` replaces `~/Downloads`): a profile's `outputDir` is a
+folder name under that root (`"dorothee"` → `~/Downloads/dorothee/`), defaults
+to the profile's folder name when omitted, and is taken literally only when
+it is absolute or starts with `~/` — use that when the user names a place.
 
 ```bash
 node comic-downloader/scripts/download.cjs --site <name> --dry-run   # preview URLs -> paths
@@ -26,7 +29,7 @@ node comic-downloader/scripts/download.cjs --config <path/to/download.config.jso
 | "issues 500 to 520", "only 2004", "pages 1-40" | edit the profile's `issueRanges` / `itemRanges` / `items` / `pages` to that subset (or copy it to a sibling profile), dry-run, run |
 | "download again", "replace the files", "the files are corrupt" | `--overwrite` (otherwise existing files are skipped) |
 | "just show me what it would download" | `--dry-run` only |
-| a profile outside `sites/` | `--config <path>` (`outputDir` is resolved relative to that file) |
+| a profile outside `sites/` | `--config <path>` (`outputDir` still resolves under `~/Downloads`) |
 | a new site | write `sites/<name>/download.config.json` from the URL pattern (below), keep any page source the user pasted in `sites/<name>/reference/`, dry-run, show it, then run |
 
 Exit status is 1 if any download failed; the summary line prints saved /

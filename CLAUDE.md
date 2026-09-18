@@ -1,11 +1,11 @@
-# comic-ai-tools
+# comic-skills
 
 One skill per top-level folder (`<skill>/SKILL.md` + `<skill>/scripts/`),
 harness-neutral: this file is read as `CLAUDE.md` (Claude Code) and, through
 a symlink, as `AGENTS.md` (Codex). The README's table lists every skill and
 its scripts; read a skill's `SKILL.md` before running any of its scripts.
 
-Skills: `gerar-paginas` (AI comic studio), `manga-translator-ptbr` (scans →
+Skills: `generate-comic-page` (AI comic studio, one reviewed page at a time), `manga-translator-ptbr` (scans →
 letter-ready or PT-BR translated PSD/XCF files), `comic-downloader`
 (pattern-based page downloads from JSON site profiles), `comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
 (CLI wrappers that pick flags from the request). `.claude/skills/` and
@@ -25,7 +25,7 @@ edit them.
   `.gitignore` already ignores any `node_modules/` and `package-lock.json`.
 - All script paths in the skills are relative to the repo root; Python
   scripts expect `venv/bin/python`. Scripts find `venv/` (repo root, two
-  levels up) and their skill's `projects/` / `models/` (one level up) from
+  levels up) and their skill's `models/` / `_template/` (one level up) from
   their own location, so run them from anywhere but don't move them out of
   `<skill>/scripts/`.
 - `manga-translator-ptbr` has three modes (C placeholder, B translate, A
@@ -35,25 +35,44 @@ edit them.
   `-f`) writes XCFs from the same blocks JSON (`--placeholder` for mode C). The
   skill always runs its pipeline to the end and delivers PSDs; XCF only
   when the request explicitly asks for GIMP files.
-- `gerar-paginas/projects/<name>/` (gitignored) holds each AI comic project:
-  `project.json`, `PROJECT.md`, `charmap.json`, `scripts_src/`, `refs/`,
-  `jobs/`, `work/`, `out/`. New projects start from `gerar-paginas/_template/`.
+- `generate-comic-page` keeps its comic projects OUTSIDE the repo:
+  `~/Downloads/<project>/` (`COMIC_PROJECTS_DIR` overrides the root, `-p
+  <path>` points at a project anywhere) with `project.json`, `PROJECT.md`,
+  `charmap.json`, `scripts_src/`, `refs/`, `jobs/`, `work/`, `out/`. New
+  projects start from `generate-comic-page/_template/` via `new_project.py`.
 
-## gerar-paginas cost rules (apply to every project)
+## generate-comic-page rules (apply to every project)
 
-Real credit costs, verified 2026-09-09, Plus plan = 1000 credits/month:
-- `gpt_image_2_5` at `quality low` / `resolution 2k` = 2 credits/gen
-  (default) — bump `--quality` to `medium` (2.5) or `high` (5.5) only if a
-  page keeps failing on text/detail fidelity. `nano_banana_flash` = 1.5
-  (cheap layout-only reroll). NEVER `gpt_image_2` (the older model, 7
-  credits) or video models. One issue ≈ 150 credits including rerolls.
-- Max 3 generation attempts per page, then flag `needs_review` for Diego.
-- Check `higgsfield account status` before each batch; warn under 100 credits.
+- ONE page per turn. Generate, self-QC, show Diego, stop. The next page is
+  generated only after he approved the current one AND said yes to the next.
+  No batch mode — don't write one.
+- At most 2 generations per turn without Diego seeing a result.
+- The image model never writes text. EVERY page is generated textless
+  (story pages with empty balloons) and delivered as a GIMP `.xcf` whose
+  text is native text layers: `make_layout.py` (OpenCV balloon detection +
+  the script's exact lines) → agent fixes the pairing on the numbered
+  overlay → `build_xcf.py`. Balloon font: `CCWildWords Regular`
+  (`"lettering_font"`). Text lines are copied from the job, never retyped.
+  `"lettering": "ai"` exists only for projects finished before this.
+- `gpt_image_2_5` at `quality low` / `resolution 2k` is the default — check
+  the real price with `gen_page.py ... --cost`; bump `--quality` only if a
+  page keeps failing on text/detail. `nano_banana_flash` = cheap layout-only
+  reroll, `nano_banana_pro` = better editor. NEVER `gpt_image_2` (the older
+  model, 7 credits) or video models.
+- Check `higgsfield account status` before generating; warn under 100
+  credits, stop and ask under 40.
 - The agent is the orchestrator and QC reviewer; there is NO LLM API usage.
-- Project-specific rules (language, continuity, special pages) live in each
+- Project-specific rules (language, continuity, fonts) live in each
   project's `PROJECT.md` — always read it before generating.
 
 ## Conventions
+
+- Results go to `~/Downloads`, never into the repo or the source folder: a
+  script's default output is `<root>/<source folder name>...` with `<root>` =
+  `$COMIC_OUTPUT_DIR` or `~/Downloads` (`$COMIC_PROJECTS_DIR` for
+  `generate-comic-page` projects), plus an `--output` / `OUT=` override.
+  Scripts never modify their input files. New scripts follow the same rule;
+  the README's "Rules" table lists each skill's default location.
 
 - Keep scripts inside their skill folder and document new ones in both the
   skill's `SKILL.md` and the README table.

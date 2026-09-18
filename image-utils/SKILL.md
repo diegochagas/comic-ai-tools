@@ -1,18 +1,22 @@
 ---
 name: image-utils
-description: Small batch image transforms on a folder - rotate every image by N degrees in place, or stretch every PNG to exact WxH pixels (aspect not preserved) into an output/ sub-folder. Use when the user asks to "rotate these pages", "turn the scans 90 degrees / upside down", "resize all PNGs to exactly 1920x1080", "stretch to fit", or similar whole-folder image edits. Chooses the script and its positional arguments from the request.
+description: Small batch image transforms on a folder - rotate every image by N degrees, or stretch every PNG to exact WxH pixels (aspect not preserved); the results go to a new folder in ~/Downloads and the originals are never touched. Use when the user asks to "rotate these pages", "turn the scans 90 degrees / upside down", "resize all PNGs to exactly 1920x1080", "stretch to fit", or similar whole-folder image edits. Chooses the script and its positional arguments from the request.
 ---
 
 # image-utils — rotate / stretch a folder of images
 
 Two scripts in `image-utils/scripts/`. Run them with the repo venv
 (`<repo>/venv/bin/python`, created by `<repo>/setup.sh`) or any Python with
-Pillow. `<repo>` is the comic-ai-tools checkout.
+Pillow. `<repo>` is the comic-skills checkout.
 
-| Script | What it does | In place? |
+**Where results go:** `~/Downloads` (`COMIC_OUTPUT_DIR` replaces that root;
+`--output <dir>` names an exact destination when the user asks for one).
+The source folder is never written to.
+
+| Script | What it does | Results |
 | --- | --- | --- |
-| `rotate_images.py <folder> [degrees]` | rotates every image (`jpg jpeg png bmp gif tiff webp`) in the folder, clockwise, default 90 | **yes — overwrites the originals** |
-| `stretch_pngs.py <folder> <width> <height>` | resizes every `.png` to exactly `width x height` (LANCZOS, aspect ratio NOT kept) | no — writes to `<folder>/output/` (same names, existing files overwritten) |
+| `rotate_images.py <folder> [degrees] [--output DIR]` | rotates every image (`jpg jpeg png bmp gif tiff webp`) in the folder, clockwise, default 90 | `~/Downloads/<folder name> rotated <degrees>/` (same names) |
+| `stretch_pngs.py <folder> <width> <height> [--output DIR]` | resizes every `.png` to exactly `width x height` (LANCZOS, aspect ratio NOT kept) | `~/Downloads/<folder name> <W>x<H>/` (same names, existing files overwritten) |
 
 Neither script recurses into sub-folders.
 
@@ -26,10 +30,10 @@ Neither script recurses into sub-folders.
 | "stretch / resize all PNGs to WxH", "exactly 1920 by 1080", "fit the screen" | `stretch_pngs.py <folder> <W> <H>` |
 | wants proportional resizing, JPEGs, or a max height rather than exact size | not this skill — `comic-archive` (`images_to_cbr.py --max-height`) or Pillow directly |
 
-Because `rotate_images.py` overwrites the originals, confirm the folder with
-the user (or tell them to back it up) if the request is ambiguous about which
-folder or direction; a wrong rotation is undone by rotating again by the
-complementary angle.
+The originals are never modified, so a wrong angle costs nothing: run it
+again with the right one. If the user explicitly wants the originals
+replaced, run the script and then tell them where the rotated copies are —
+moving them over the originals is their call.
 
 ## Examples
 
@@ -41,5 +45,5 @@ complementary angle.
 
 ## Report
 
-Number of files touched, the angle or target size, and where the results are
-(`in place` vs `<folder>/output/`).
+Number of files written, the angle or target size, and the full path of the
+results folder in `~/Downloads`.

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import argparse
 import re
 import shutil
@@ -209,7 +210,7 @@ def transcribe_folder(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Transcribe Japanese text from image files into a block-organized TXT file.")
     parser.add_argument("folder", type=Path, help="Folder containing image files.")
-    parser.add_argument("--output", "-o", type=Path, default=None, help="Output TXT file. Default: <folder>/japanese_transcription.txt")
+    parser.add_argument("--output", "-o", type=Path, default=None, help="Output TXT file. Default: ~/Downloads/<folder name>/japanese_transcription.txt ($COMIC_OUTPUT_DIR overrides ~/Downloads)")
     parser.add_argument("--tesseract", default=None, help="Full path to the tesseract binary if it is not on PATH.")
     parser.add_argument("--tessdata-dir", type=Path, default=None, help="Folder containing Tesseract traineddata files. Default: <skill>/tessdata (japanese-ocr-translate/tessdata).")
     parser.add_argument("--lang", default="jpn_vert+jpn", help="Tesseract language(s). Use jpn_vert for vertical Japanese novels.")
@@ -227,7 +228,8 @@ def main() -> int:
         print(f"ERROR: Input folder does not exist or is not a directory: {folder}")
         return 1
 
-    output = (args.output or folder / "japanese_transcription.txt").expanduser().resolve()
+    output_root = Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads").expanduser()
+    output = (args.output or output_root / folder.name / "japanese_transcription.txt").expanduser().resolve()
     tesseract = resolve_tesseract(args.tesseract)
     tessdata_dir = args.tessdata_dir.expanduser().resolve() if args.tessdata_dir else default_tessdata_dir()
     lang = choose_ocr_language(tesseract, args.lang, tessdata_dir)

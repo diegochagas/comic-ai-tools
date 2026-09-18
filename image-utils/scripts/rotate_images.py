@@ -1,37 +1,54 @@
+#!/usr/bin/env python3
+"""Rotate every image of a folder clockwise by N degrees (default 90).
+
+The originals are never touched: the rotated copies go to
+~/Downloads/<folder name> rotated <degrees>/ (or $COMIC_OUTPUT_DIR/..., or
+--output <dir>), same file names.
+
+Usage: rotate_images.py <folder> [degrees] [--output DIR]
+"""
+import argparse
 import os
 import sys
 from pathlib import Path
+
 from PIL import Image
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
 
 
-def rotate_images(folder: str, degrees: int = 90) -> None:
-    folder_path = Path(folder)
-    if not folder_path.is_dir():
+def output_root() -> Path:
+    return Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads").expanduser()
+
+
+def rotate_images(folder: Path, degrees: int, output: Path) -> None:
+    if not folder.is_dir():
         print(f"Error: '{folder}' is not a valid directory.")
         sys.exit(1)
+    if output.resolve() == folder.resolve():
+        print("Error: --output is the source folder; the originals are never overwritten.")
+        sys.exit(1)
 
-    images = [f for f in folder_path.iterdir() if f.suffix.lower() in IMAGE_EXTENSIONS]
+    images = sorted(f for f in folder.iterdir() if f.suffix.lower() in IMAGE_EXTENSIONS)
     if not images:
         print("No images found in the folder.")
         return
 
+    output.mkdir(parents=True, exist_ok=True)
     for image_path in images:
         with Image.open(image_path) as img:
-            rotated = img.rotate(-degrees, expand=True)
-            rotated.save(image_path)
+            img.rotate(-degrees, expand=True).save(output / image_path.name)
         print(f"Rotated: {image_path.name}")
 
-    print(f"\nDone. {len(images)} image(s) rotated {degrees} degrees.")
+    print(f"\nDone. {len(images)} image(s) rotated {degrees} degrees -> {output}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python rotate_images.py <folder> [degrees]")
-        print("  degrees defaults to 90 if not specified")
-        sys.exit(1)
-
-    folder_arg = sys.argv[1]
-    degrees_arg = int(sys.argv[2]) if len(sys.argv) > 2 else 90
-    rotate_images(folder_arg, degrees_arg)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("folder")
+    ap.add_argument("degrees", type=int, nargs="?", default=90)
+    ap.add_argument("--output", help="destination folder (default: ~/Downloads/<folder name> rotated <degrees>)")
+    a = ap.parse_args()
+    src = Path(a.folder).expanduser().resolve()
+    dst = Path(a.output).expanduser() if a.output else output_root() / f"{src.name} rotated {a.degrees}"
+    rotate_images(src, a.degrees, dst)

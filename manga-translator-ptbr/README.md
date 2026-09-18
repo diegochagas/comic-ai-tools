@@ -148,9 +148,9 @@ pre-rendered) and has no effect on editing.
   the pages in Photoshop, if you want the text to render correctly instead
   of falling back.
 
-Output goes to a `psd/` folder next to the images by default (PSDs,
-previews, and detection artifacts). If that folder lives inside an
-actively-syncing cloud drive (Nextcloud, Dropbox, ...), the sync client can
-race a fresh write and revert it to an older version within seconds —
-verify the result a moment after writing, or write to a local, unsynced
-path first if that happens.
+Output goes to `~/Downloads/<source folder name>/` by default (PSDs/XCFs,
+previews, detection artifacts, scratch) — `COMIC_OUTPUT_DIR` replaces
+`~/Downloads`, `OUT=` names another folder. The source folder is never
+written to. If you point the output at an actively-syncing cloud drive
+(Nextcloud, Dropbox, ...), the sync client can race a fresh write and
+revert it within seconds — verify the result a moment after writing.

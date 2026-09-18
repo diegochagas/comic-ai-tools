@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import argparse
 import re
 import sys
@@ -110,7 +111,7 @@ def translate_file(input_file: Path, output_file: Path, source: str, target: str
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Translate a block-organized Japanese transcription TXT into Brazilian Portuguese.")
     parser.add_argument("input", type=Path, help="Japanese transcription TXT created by transcribe_japanese_images.py.")
-    parser.add_argument("--output", "-o", type=Path, default=None, help="Output TXT file. Default: <input_stem>_pt_br.txt")
+    parser.add_argument("--output", "-o", type=Path, default=None, help="Output TXT file. Default: <input_stem>_pt_br.txt next to the input when it is already under ~/Downloads, else ~/Downloads/<input folder name>/<input_stem>_pt_br.txt")
     parser.add_argument("--source", default="ja", help="Source language for Google Translate.")
     parser.add_argument("--target", default="pt", help="Target language for Google Translate. Use pt for Portuguese.")
     parser.add_argument("--no-cache", action="store_true", help="Do not reuse per-block translation cache files.")
@@ -125,7 +126,10 @@ def main() -> int:
         return 1
 
     check_dependencies()
-    output_file = (args.output or input_file.with_name(f"{input_file.stem}_pt_br.txt")).expanduser().resolve()
+    output_root = Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads").expanduser().resolve()
+    default_dir = (input_file.parent if output_root in input_file.resolve().parents
+                   else output_root / input_file.resolve().parent.name)
+    output_file = (args.output or default_dir / f"{input_file.stem}_pt_br.txt").expanduser().resolve()
     translate_file(
         input_file=input_file,
         output_file=output_file,

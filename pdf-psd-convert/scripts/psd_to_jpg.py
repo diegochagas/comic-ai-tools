@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import struct
 import sys
 from pathlib import Path
@@ -130,7 +131,7 @@ def main() -> int:
         "--output",
         type=Path,
         default=None,
-        help="Output folder. Default: a sibling folder named '<source folder> JPG'.",
+        help="Output folder. Default: ~/Downloads/<source folder> JPG ($COMIC_OUTPUT_DIR overrides ~/Downloads).",
     )
     parser.add_argument(
         "--background",
@@ -163,7 +164,7 @@ def main() -> int:
     output = (
         args.output
         if args.output is not None
-        else source.with_name(source.name + " JPG")
+        else Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads").expanduser() / (source.name + " JPG")
     ).resolve()
 
     if not source.exists():

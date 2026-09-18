@@ -7,12 +7,16 @@ description: OCR the Japanese text of every image in a folder (Tesseract, vertic
 
 Two scripts in `japanese-ocr-translate/scripts/`, meant to be run one after
 the other. Run them with the repo venv (`<repo>/venv/bin/python`, created by
-`<repo>/setup.sh`). `<repo>` is the comic-ai-tools checkout.
+`<repo>/setup.sh`). `<repo>` is the comic-skills checkout.
+
+**Where results go:** `~/Downloads` (`COMIC_OUTPUT_DIR` replaces that root;
+`--output <file.txt>` names an exact file when the user asks for one).
+The source folder is never written to.
 
 | Script | What it does | Needs |
 | --- | --- | --- |
-| `transcribe_japanese_images.py <folder>` | Tesseract OCR of every image in the folder (natural filename order) → `<folder>/japanese_transcription.txt`, one `## <image>` block per page, `---` between blocks; per-image cache next to the output | `tesseract` on PATH (`sudo apt install tesseract-ocr`), Pillow, Japanese traineddata in `japanese-ocr-translate/tessdata/` (downloaded by `japanese-ocr-translate/setup.sh`) |
-| `translate_japanese_texts_ptbr.py <txt>` | translates each block of that TXT → `<stem>_pt_br.txt`, same block headings; per-block cache | `deep-translator`, internet access (Google Translate) |
+| `transcribe_japanese_images.py <folder>` | Tesseract OCR of every image in the folder (natural filename order) → `~/Downloads/<folder name>/japanese_transcription.txt`, one `## <image>` block per page, `---` between blocks; per-image cache next to the output | `tesseract` on PATH (`sudo apt install tesseract-ocr`), Pillow, Japanese traineddata in `japanese-ocr-translate/tessdata/` (downloaded by `japanese-ocr-translate/setup.sh`) |
+| `translate_japanese_texts_ptbr.py <txt>` | translates each block of that TXT → `<stem>_pt_br.txt` beside it (it is already in `~/Downloads`; a TXT from elsewhere goes to `~/Downloads/<its folder name>/`), same block headings; per-block cache | `deep-translator`, internet access (Google Translate) |
 
 Output block shape:
 
@@ -59,7 +63,7 @@ script: for translated Photoshop text boxes over the pages use the
 ```bash
 <repo>/venv/bin/python japanese-ocr-translate/scripts/transcribe_japanese_images.py "/path/to/images"
 <repo>/venv/bin/python japanese-ocr-translate/scripts/transcribe_japanese_images.py "/path/to/images" --lang jpn --psm 6 --output "/path/to/jp.txt"
-<repo>/venv/bin/python japanese-ocr-translate/scripts/translate_japanese_texts_ptbr.py "/path/to/images/japanese_transcription.txt"
+<repo>/venv/bin/python japanese-ocr-translate/scripts/translate_japanese_texts_ptbr.py ~/Downloads/images/japanese_transcription.txt
 ```
 
 ## Report

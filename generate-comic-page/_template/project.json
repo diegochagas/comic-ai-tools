@@ -6,9 +6,13 @@
   "page_header_regex": "^=== PAGE (\\d+)\\s*[—-]\\s*(.*?)\\s*===\\s*$",
   "aspect": "2:3",
   "language": "pt-BR",
-  "lettering": "manual",
+  "lettering": "xcf",
+  "lettering_font": "CCWildWords Regular",
+  "style_label": "",
+  "page_kinds": { "1": "cover", "2": "editorial" },
   "style_refs": {
     "cover": [],
+    "editorial": [],
     "default": []
   },
   "cbz": {

@@ -3,12 +3,18 @@
 
 By default, images are added as-is. Optional flags can convert images to JPEG
 and/or resize tall images before they are written into the archive.
+
+The archives are written to ~/Downloads ($COMIC_OUTPUT_DIR overrides the
+root, --output <dir> the exact destination), never into the source folder:
+  folder of images            -> ~/Downloads/<folder>.cbr
+  folder of chapter folders   -> ~/Downloads/<folder>/<chapter>.cbr
 """
 
 from __future__ import annotations
 
 import argparse
 import io
+import os
 import sys
 import zipfile
 from dataclasses import dataclass
@@ -27,6 +33,10 @@ class ImageOptions:
     @property
     def needs_pillow(self) -> bool:
         return self.convert_jpeg or self.max_height is not None
+
+
+def output_root() -> Path:
+    return Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads").expanduser()
 
 
 def get_images(folder: Path) -> list[Path]:
@@ -91,6 +101,7 @@ def pack_cbr(image_folder: Path, output_dir: Path, options: ImageOptions) -> Pat
         print(f"  SKIP: '{image_folder.name}' - no images found.")
         return None
 
+    output_dir.mkdir(parents=True, exist_ok=True)
     cbr_path = output_dir / f"{image_folder.name}.cbr"
     zip_path = output_dir / f"{image_folder.name}.zip"
 
@@ -130,7 +141,7 @@ def pack_cbr(image_folder: Path, output_dir: Path, options: ImageOptions) -> Pat
     return cbr_path
 
 
-def process(root: Path, options: ImageOptions) -> None:
+def process(root: Path, options: ImageOptions, output: Path | None) -> None:
     if not root.is_dir():
         print(f"Error: '{root}' is not a directory.")
         sys.exit(1)
@@ -144,10 +155,10 @@ def process(root: Path, options: ImageOptions) -> None:
     if subfolders:
         print(f"Found {len(subfolders)} subfolder(s) in '{root.name}' - processing each:")
         for subfolder in subfolders:
-            pack_cbr(subfolder, root, options)
+            pack_cbr(subfolder, output or output_root() / root.name, options)
     elif root_images:
         print(f"Found {len(root_images)} image(s) in '{root.name}' - creating CBR:")
-        pack_cbr(root, root.parent, options)
+        pack_cbr(root, output or output_root(), options)
     else:
         print("No images or subfolders with images found.")
 
@@ -179,6 +190,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Replace existing CBR files",
     )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="Folder to write the .cbr file(s) into (default: under ~/Downloads)",
+    )
     return parser.parse_args()
 
 
@@ -197,7 +213,8 @@ def main() -> None:
         quality=args.quality,
         overwrite=args.overwrite,
     )
-    process(Path(args.folder), options)
+    process(Path(args.folder).expanduser().resolve(), options,
+            Path(args.output).expanduser() if args.output else None)
 
 
 if __name__ == "__main__":

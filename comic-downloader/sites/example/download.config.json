@@ -1,7 +1,7 @@
 {
   "siteName": "Example Image Site",
   "baseUrl": "https://example.com/assets",
-  "outputDir": "../../downloads/example-site",
+  "outputDir": "example-site",
   "overwriteExisting": false,
   "pageNumberPadding": 2,
   "downloads": [

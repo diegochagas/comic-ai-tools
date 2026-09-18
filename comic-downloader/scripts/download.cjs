@@ -7,6 +7,7 @@
 //
 // Usage: node comic-downloader/scripts/download.cjs [--site <name> | --config <path>] [--dry-run] [--overwrite]
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { pipeline } = require('stream/promises');
 
@@ -479,10 +480,23 @@ function getItemContext(item, config) {
   return context;
 }
 
+// Downloads land in ~/Downloads ($COMIC_OUTPUT_DIR overrides that root):
+//   no "outputDir"            -> <root>/<profile folder name>
+//   "outputDir": "my-site"    -> <root>/my-site       (relative = under the root)
+//   "outputDir": "~/x", "/x"  -> exactly there
+function resolveOutputRoot(config, configPath) {
+  const root = process.env.COMIC_OUTPUT_DIR || path.join(os.homedir(), 'Downloads');
+  const dir = config.outputDir ?? path.basename(path.dirname(configPath));
+  if (dir === '~' || dir.startsWith('~/')) {
+    return path.join(os.homedir(), dir.slice(2));
+  }
+  return path.resolve(root, dir);
+}
+
 function buildJobs(config, configPath) {
   const { items, hasConfiguredItems } = getItems(config);
   const downloads = config.downloads ?? [];
-  const outputRoot = path.resolve(path.dirname(configPath), config.outputDir ?? 'downloads');
+  const outputRoot = resolveOutputRoot(config, configPath);
   const itemFolderTemplate = config.itemFolderTemplate
     ?? config.collectionFolderTemplate
     ?? config.issueFolderTemplate

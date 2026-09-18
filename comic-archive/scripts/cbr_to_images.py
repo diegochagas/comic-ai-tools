@@ -1,6 +1,14 @@
+"""Unpack .cbr/.cbz/.zip comic archives into image folders (or just the covers).
+
+Results go to ~/Downloads/<target folder name>/ ($COMIC_OUTPUT_DIR overrides
+the root, --output <dir> the exact destination), never next to the archives:
+  <archive stem>/        one folder of pages per archive
+  <archive stem>.<ext>   the cover only, with --first-only
+"""
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import tempfile
@@ -18,6 +26,10 @@ EXTRACTOR_CANDIDATES = (
     ("7z", ("x", "-y")),
     (r"C:\Program Files\7-Zip\7z.exe", ("x", "-y")),
 )
+
+
+def output_root() -> Path:
+    return Path(os.environ.get("COMIC_OUTPUT_DIR") or Path.home() / "Downloads").expanduser()
 
 
 def unique_path(path: Path) -> Path:
@@ -61,7 +73,7 @@ def extract_with_external_tool(archive: Path, output_dir: Path) -> None:
     subprocess.run(command, check=True)
 
 
-def extract_first_image(archive: Path, dry_run: bool = False) -> None:
+def extract_first_image(archive: Path, output: Path, dry_run: bool = False) -> None:
     if zipfile.is_zipfile(archive):
         with zipfile.ZipFile(archive) as zip_archive:
             image_names = sorted(
@@ -72,8 +84,8 @@ def extract_first_image(archive: Path, dry_run: bool = False) -> None:
                 print(f"Skip (no images): {archive.name}")
                 return
             first_name = image_names[0]
-            output_path = unique_path(archive.parent / (archive.stem + Path(first_name).suffix))
-            print(f"Cover: {archive.name} -> {output_path.name}")
+            output_path = unique_path(output / (archive.stem + Path(first_name).suffix))
+            print(f"Cover: {archive.name} -> {output_path}")
             if not dry_run:
                 output_path.write_bytes(zip_archive.read(first_name))
     elif is_rar_archive(archive):
@@ -89,18 +101,18 @@ def extract_first_image(archive: Path, dry_run: bool = False) -> None:
                 print(f"Skip (no images): {archive.name}")
                 return
             first_image = images[0]
-            output_path = unique_path(archive.parent / (archive.stem + first_image.suffix))
-            print(f"Cover: {archive.name} -> {output_path.name}")
+            output_path = unique_path(output / (archive.stem + first_image.suffix))
+            print(f"Cover: {archive.name} -> {output_path}")
             if not dry_run:
                 shutil.copy2(first_image, output_path)
     else:
         raise ValueError(f"Unsupported archive format: {archive}")
 
 
-def extract_archive(archive: Path, dry_run: bool = False) -> None:
-    output_dir = unique_path(archive.with_suffix(""))
+def extract_archive(archive: Path, output: Path, dry_run: bool = False) -> None:
+    output_dir = unique_path(output / archive.stem)
 
-    print(f"Extract: {archive.name} -> {output_dir.name}\\")
+    print(f"Extract: {archive.name} -> {output_dir}/")
     if dry_run:
         return
 
@@ -118,7 +130,7 @@ def extract_archive(archive: Path, dry_run: bool = False) -> None:
         raise
 
 
-def process_folder(target: Path, dry_run: bool = False, first_only: bool = False) -> None:
+def process_folder(target: Path, output: Path, dry_run: bool = False, first_only: bool = False) -> None:
     if not target.is_dir():
         raise NotADirectoryError(f"Target folder does not exist: {target}")
 
@@ -132,9 +144,11 @@ def process_folder(target: Path, dry_run: bool = False, first_only: bool = False
         print("No .cbr, .cbz, or .zip files found.")
         return
 
+    if not dry_run:
+        output.mkdir(parents=True, exist_ok=True)
     action = extract_first_image if first_only else extract_archive
     for archive in archives:
-        action(archive, dry_run)
+        action(archive, output, dry_run)
 
 
 def main() -> None:
@@ -157,11 +171,19 @@ def main() -> None:
     parser.add_argument(
         "--first-only",
         action="store_true",
-        help="Extract only the first image from each archive into the target folder.",
+        help="Extract only the first image (the cover) of each archive.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Folder to write into (default: ~/Downloads/<target folder name>).",
     )
     args = parser.parse_args()
 
-    process_folder(args.target, args.dry_run, args.first_only)
+    target = args.target.expanduser().resolve()
+    output = args.output.expanduser() if args.output else output_root() / target.name
+    process_folder(target, output, args.dry_run, args.first_only)
 
 
 if __name__ == "__main__":

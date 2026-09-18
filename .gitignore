@@ -1,7 +1,3 @@
-# gerar-paginas comic projects (scripts, refs, jobs, work-in-progress renders, output .cbz)
-# — large binary/generated content, not meant for version control.
-gerar-paginas/projects/
-
 # setup.sh output (not committed): shared venv, per-skill models/data
 venv/
 manga-translator-ptbr/models/
@@ -27,6 +23,3 @@ Thumbs.db
 
 # Per-job scratch (translation worklists for a specific run), wherever it appears
 tmp_worklists/
-
-# comic-downloader output (site profiles default to <skill>/downloads/<site>/)
-comic-downloader/downloads/
