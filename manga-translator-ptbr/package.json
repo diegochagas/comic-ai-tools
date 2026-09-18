@@ -1,0 +1,11 @@
+{
+  "name": "manga-translator-ptbr",
+  "private": true,
+  "description": "Node deps for this skill's .mjs scripts: ag-psd writes native Photoshop text/raster layers, canvas decodes page images, pngjs reads cleaned PNGs.",
+  "type": "module",
+  "dependencies": {
+    "ag-psd": "^31.0.2",
+    "canvas": "^3.2.3",
+    "pngjs": "^7.0.0"
+  }
+}

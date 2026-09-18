@@ -1,0 +1,43 @@
+{
+  "siteName": "Dorothee Magazine",
+  "baseUrl": "https://dorotheemagazine.fr/_media/img/xlarge",
+  "outputDir": "../../downloads/dorothee",
+  "overwriteExisting": false,
+  "monthNames": [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre"
+  ],
+  "itemNumberPadding": 3,
+  "issueNumberPadding": 3,
+  "pageNumberPadding": 2,
+  "itemFolderTemplate": "{issue} - {dateLabel}",
+  "issueRanges": [
+    {
+      "startIssue": 484,
+      "startDate": "2002-01",
+      "endIssue": 539,
+      "endDate": "2006-08"
+    }
+  ],
+  "issues": [],
+  "downloads": [
+    {
+      "name": "pages-35-a-38",
+      "pages": {
+        "from": 2,
+        "to": 5
+      },
+      "urlPathTemplate": "{issuePadded}-35-a-38-{page}.jpg"
+    }
+  ]
+}

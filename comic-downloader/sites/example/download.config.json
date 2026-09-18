@@ -1,0 +1,31 @@
+{
+  "siteName": "Example Image Site",
+  "baseUrl": "https://example.com/assets",
+  "outputDir": "../../downloads/example-site",
+  "overwriteExisting": false,
+  "pageNumberPadding": 2,
+  "downloads": [
+    {
+      "name": "numbered-gallery",
+      "pages": {
+        "from": 1,
+        "to": 3
+      },
+      "urlPathTemplate": "gallery/image-{pagePadded}.jpg",
+      "fileNameTemplate": "gallery-{pagePadded}.jpg"
+    },
+    {
+      "name": "direct-image-urls",
+      "urls": [
+        {
+          "url": "https://example.com/media/header.jpg",
+          "fileName": "header.jpg"
+        },
+        {
+          "url": "https://example.com/media/detail.jpg",
+          "fileName": "detail.jpg"
+        }
+      ]
+    }
+  ]
+}

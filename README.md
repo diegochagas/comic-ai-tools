@@ -1,810 +1,117 @@
-# Comic AI Tools
-
-A toolkit for creating and working with comic/manga archives: an AI comic
-generation studio (page scripts → AI-generated pages → `.cbz`), packaging and
-extracting CBR/CBZ archives, converting between PDF/PSD/image formats, small
-image utilities, and a Claude Code skill that automates Photoshop lettering
-prep (text detection, cleaning, paragraph text boxes). Each piece below is
-independent — use whichever one you need.
-
-## Overview
-
-| Script / skill                                             | What it does                                                                                                                                                                   |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **AI comic studio** (`pipeline/` + skill `/gerar-paginas`) | Generates full comic issues with AI (Higgsfield) page by page, with visual QC + reroll loop, lettering guide, and `.cbz` assembly.                                             |
-| **Manga lettering pipeline** (`SKILL.md` + `scripts/`)     | Claude Code skill — turns manga/doujinshi page scans into layered, letter-ready PSDs: text detected and erased, a native Photoshop paragraph text box added per speech bubble. |
-| `tools/images_to_cbr.py`                                   | Packages a folder of images into a `.cbr` archive.                                                                                                                             |
-| `tools/cbr_to_images.py`                                   | Extracts `.cbr`/`.cbz`/`.zip` comic archives into image folders.                                                                                                               |
-| `tools/pdf_to_images.py`                                   | Extracts PDF pages as JPG images.                                                                                                                                              |
-| `tools/psd_to_jpg.py`                                      | Converts Photoshop `.psd`/`.psb` files to JPG.                                                                                                                                 |
-| `tools/rotate_images.py`                                   | Rotates every image in a folder by a given angle.                                                                                                                              |
-| `tools/stretch_pngs.py`                                    | Stretches every PNG in a folder to exact dimensions.                                                                                                                           |
-| `tools/transcribe_japanese_images.py`                      | Transcribes Japanese text from every image in a folder into a block-organized TXT file.                                                                                        |
-| `tools/translate_japanese_texts_ptbr.py`                   | Translates a block-organized Japanese transcription TXT into Brazilian Portuguese.                                                                                             |
-
----
-
-## AI comic studio (`pipeline/`)
-
-Formerly the standalone `ai-comics` repo (docs in PT-BR).
-
-Pipeline genérico para gerar edições completas de quadrinhos com IA e empacotar
-como `.cbz`. Cada quadrinho é um projeto em `projects/<nome>/`; o primeiro é o
-**megaman-nam** (_Novas Aventuras de Megaman_ 17–20).
-
-`projects/` está no `.gitignore` (roteiros, refs, renders e `.cbz` gerados —
-conteúdo grande e não versionado); o template para novos projetos vive em
-`_template/` na raiz do repo por isso mesmo.
-
-### Arquitetura (e por que é a opção mais barata)
-
-| Papel                    | Ferramenta                                                  | Custo                                         |
-| ------------------------ | ----------------------------------------------------------- | --------------------------------------------- |
-| Orquestração + QC visual | **Claude Code** (skill `/gerar-paginas`)                    | já incluso na assinatura — **sem Claude API** |
-| Geração de imagem        | **Higgsfield CLI** — `nano_banana_pro` (2 créditos/geração) | plano Plus: 1000 créditos/mês ≈ 500 gerações  |
-| Parsing, CBZ, estado     | Scripts Python locais                                       | zero                                          |
-
-Orçamento real (medido via `higgsfield generate cost`): uma edição de 30
-páginas com ~2,5 tentativas/página ≈ **150 créditos** — as 4 edições do
-megaman-nam cabem em um mês de plano Plus com folga. O skill confere o saldo
-(`higgsfield account status`) antes de cada lote.
-
-### Setup (uma vez — já feito)
-
-```bash
-npm i -g @higgsfield/cli
-higgsfield auth login          # login na conta Higgsfield (navegador)
-npx skills add higgsfield-ai/skills
-```
-
-Requisito local: `python3` com `Pillow`.
-
-### Uso
-
-```bash
-# 1. dividir os roteiros de um projeto em jobs por página (já feito p/ megaman-nam)
-python3 pipeline/split_scripts.py -p megaman-nam
-
-# 2. abrir o Claude Code nesta pasta e rodar:
-#    /gerar-paginas megaman-nam 17        → gera+QC as próximas páginas pendentes
-#    /gerar-paginas megaman-nam 17 5-10   → páginas específicas
-
-# 3. progresso
-python3 pipeline/status.py
-
-# 4. guia de letreiramento (o texto de cada balão, página a página)
-python3 pipeline/make_lettering_guide.py -p megaman-nam 17
-#    → projects/megaman-nam/out/lettering_17.md
-
-# 5. quando a edição fechar (depois do letreiramento manual, re-salve as
-#    páginas letreiradas em work/17/approved/ antes de montar)
-python3 pipeline/assemble_cbz.py -p megaman-nam 17   # → projects/megaman-nam/out/Megaman17.cbz
-```
-
-**Letreiramento:** os projetos com `"lettering": "manual"` no project.json
-geram as páginas com balões vazios (forma e posição certas, sem nenhum
-texto) — os textos são adicionados manualmente depois, seguindo o guia. Para
-deixar a IA renderizar os textos, use `"lettering": "ai"`.
-
-Páginas que falharem 3x ficam `needs_review` no `work/<ed>/state.json` do
-projeto — revise o motivo, ajuste o roteiro se preciso e rode o skill de novo.
-
-### Começar um quadrinho novo
-
-1. Copie `_template/` (na raiz do repo, fora de `projects/`) para
-   `projects/<nome-novo>/`.
-2. Preencha `PROJECT.md` (fontes, estilo, regras de QC, páginas especiais) e
-   `project.json` (edições, padrão dos roteiros, nomes do cbz).
-3. Adicione `scripts_src/` (roteiros página a página), `refs/model-sheets/`,
-   `refs/style/` e `charmap.json` (use o megaman-nam como referência de formato).
-4. `python3 pipeline/split_scripts.py -p <nome-novo>` e depois
-   `/gerar-paginas <nome-novo> <edição>` no Claude Code.
-
-### Projetos
-
-- **megaman-nam** — Novas Aventuras de Megaman 17–20. Detalhes:
-  [projects/megaman-nam/PROJECT.md](projects/megaman-nam/PROJECT.md).
-  Roteiros-fonte: `~/Nextcloud/Documents/Reading/Novas Aventuras de
-Megaman/Megaman17..20.md` (se editar, re-copiar p/ `scripts_src/` e rodar o
-  splitter; o estado das páginas já geradas é preservado).
-
----
-
-## Manga lettering pipeline (Claude Code skill)
-
-Turns a folder of manga/doujinshi page scans into layered PSD files ready to
-hand to a letterer: the original text erased cleanly, and an editable
-Photoshop paragraph text box already sitting in place of each speech
-bubble/caption, pre-filled with placeholder text in a comic lettering font.
-No more hand-drawing a Type tool box over every bubble before you can start
-translating — open the PSD and start typing.
-
-### Output: what's in the PSD
-
-Every page becomes a PSD with:
-
-- **Layer "Original"** (bottom) — the untouched scan, for reference or to
-  restore anything the cleaning step damaged.
-- **Layer "Cleaned"** — the same page with **all** detected CJK text erased,
-  and **only** text: stroke detections are gated by the model's own
-  text-block boxes and text-line map, so stroke-like false positives on art
-  (decorative borders, hatching, screentone) stay untouched. Each erased
-  region is filled with the predominant color around it: an exact sampled
-  solid color when the surroundings are one plain color (white/black speech
-  bubbles, grey caption boxes, colored banners, ...), or inpainted from the
-  surrounding pixels when the text sits over artwork. Inpainted areas are
-  imperfect by nature — restoration of anything worth keeping is manual, by
-  copying from the Original layer.
-- **One native Photoshop Type layer per detected text block** (top) — a real,
-  editable **paragraph text box** (Photoshop's Paragraph Type tool: a fixed
-  word-wrap box, not the auto-sizing Point Type), positioned and sized to
-  match that text region exactly. Pre-filled with Lorem ipsum placeholder
-  text set in **CCWildWords-Regular** (a manga/comic lettering font) so you
-  see the actual lettering style immediately — select all, type the
-  translation, done.
-
-Every page gets a PSD even if nothing was detected (two identical raster
-layers, no text boxes), so a whole folder converts completely in one pass.
-
-#### Example
-
-The same panel through the three layers, bottom to top:
-
-| Original                                                  | Cleaned                                                 | + Photoshop text boxes                                     |
-| --------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------- |
-| ![Original scan with raw text](examples/066-original.jpg) | ![Text erased, bubbles blank](examples/066-cleaned.jpg) | ![Placeholder text in each box](examples/066-lettered.jpg) |
-
-### How it works (fixed pipeline)
-
-The pipeline is three separate tools chained together, each doing the one
-thing it's actually good at:
-
-1. **Detect + erase** (`scripts/detect_text.py`, Python/ONNX) —
-   [comic-text-detector](https://github.com/dmMaze/comic-text-detector) (run
-   locally via onnxruntime, no network calls) produces a pixel-accurate mask
-   of text strokes plus text-region detections (block boxes + a line map)
-   that gate it. The same script classifies each erased component's
-   surroundings (plain single color vs. busy), solid-fills or inpaints it,
-   and writes the fully cleaned page image plus a color-coded overlay and a
-   JSON report (including each text block's bounding box — reused in step 3).
-2. **Assemble the raster layers** (`scripts/gimp_clean.py`, headless flatpak
-   GIMP 3) — stacks the cleaned page over the untouched original and exports
-   the PSD plus a JPG preview.
-3. **Add the paragraph text boxes** (`scripts/add_text_layers.mjs`, Node +
-   [ag-psd](https://github.com/Agamnentzar/ag-psd)) — GIMP's own PSD exporter
-   _rasterizes_ any text layer on save (confirmed by inspecting its output
-   byte-for-byte: no `TySh`/`EngineData` Photoshop Type-tool records at all),
-   so it's structurally incapable of writing a real, editable Photoshop text
-   layer. This step writes those binary layer records directly instead: one
-   paragraph box per entry in step 1's detected `text_blocks`, appended above
-   Cleaned. It rewrites just the PSD's layer list — the existing Original and
-   Cleaned raster layers pass through byte-exact (verified pixel-for-pixel
-   against the pre-step-3 file).
-
-A fourth step, done by Claude rather than a script, spot-checks the previews
-for gross failures (a page that failed to process, a badly wrong fill color)
-before moving on — small imperfections over art are expected and left for
-manual restoration, not chased automatically.
-
-`gimp_clean.py` also keeps a legacy mode with per-region cleaning actions
-(fills, Resynthesizer healing), used only if you explicitly ask for manual
-region work instead of the automatic pipeline above.
-
-### Modular alternative: incremental PSD building
-
-Alongside the fixed pipeline above, three scripts let you build and extend PSDs
-incrementally, each usable on its own and each accepting a folder or a single
-file:
-
-- **`scripts/image_to_psd.py`** — folder or single image -> a PSD with two
-  identical raster layers, `Original` (bottom) and `Copy` (top). No detection,
-  no cleaning: just the starting point for the two scripts below.
-- **`scripts/add_cleaned_layer.py`** — folder or single PSD -> a _copy_ of the
-  PSD with a new `Cleaned` layer appended on top, with all detected text
-  erased exactly like `detect_text.py` does in the fixed pipeline. Detects
-  text on the PSD's `Original` layer (or reuses a previous `detect_text.py`
-  run's JSON via `--detect-dir`, instead of re-running the model). Never
-  modifies the input file.
-- **`scripts/add_text_boxes.py`** — folder or single PSD -> appends one native
-  Photoshop paragraph text layer per detected text region, in place. Detects
-  text the same way (fresh, or reused via `--detect-dir`).
-
-Recommended stacking order when using all three: `image_to_psd.py` ->
-`add_cleaned_layer.py` -> `add_text_boxes.py` (Original -> Cleaned -> text
-boxes, bottom to top) — this reproduces the same end result as the fixed
-pipeline, one composable step at a time. The last two can safely run in either
-order on the same file: `add_cleaned_layer.py` never re-opens the PSD through
-GIMP (it appends the raster layer directly with `ag-psd`), so it can't
-rasterize/corrupt Photoshop text layers `add_text_boxes.py` already wrote.
-
-```
-python scripts/image_to_psd.py <folder-or-image> [--output <dir>]
-python scripts/add_cleaned_layer.py <folder-or-psd> [--output <dir>] [--layer-name Original] [--detect-dir <dir>]
-python scripts/add_text_boxes.py <folder-or-psd> [--layer-name Original] [--detect-dir <dir>]
-```
-
-### Fonts and editability
-
-The text boxes reference their font (`CCWildWords-Regular`) by **PostScript
-name only** — no font data is embedded in the PSD. Photoshop resolves the
-actual glyphs from fonts installed on whichever machine opens the file. If
-that machine doesn't have CCWildWords installed, Photoshop substitutes a
-fallback font and shows a missing-font warning — the layer is still fully
-editable either way, it just won't _look_ right until the real font is
-installed (or you pick a different one).
-
-Photoshop will also show a one-time "update text layer" prompt the first
-time you touch each box. This is normal for any text layer written
-programmatically rather than by Photoshop itself (the raster preview isn't
-pre-rendered) and has no effect on editing.
-
-### Requirements
-
-- Linux with [flatpak GIMP 3](https://flathub.org/apps/org.gimp.GIMP)
-  (`org.gimp.GIMP`). The optional legacy healing actions additionally need
-  the Resynthesizer plugin flatpak.
-- Python 3 with `venv`.
-- Node.js + npm (for the `ag-psd`-based text-layer steps).
-- ~100 MB disk for the detection model (downloaded by `setup.sh`).
-- Tesseract OCR binary on `PATH` (`sudo apt install tesseract-ocr`), only
-  needed for `tools/transcribe_japanese_images.py`.
-- The `CCWildWords-Regular` font installed wherever you'll actually letter
-  the pages in Photoshop, if you want the placeholder text to render
-  correctly instead of falling back.
-
-### Install as a skill
-
-```bash
-git clone <this repo> ~/.claude/skills/manga-letterer
-~/.claude/skills/manga-letterer/setup.sh
-```
-
-`setup.sh` creates the Python venv (also covers the standalone `tools/`
-scripts' deps), downloads the ONNX detection model and the Japanese Tesseract
-language data (`tools/tessdata/`), and runs `npm install` for the
-`ag-psd`/`pngjs` dependencies. Then in Claude Code, ask to clean a folder of
-pages or invoke `/manga-letterer`. Output goes to a `psd/` folder next to the
-images by default (PSDs, previews, and detection artifacts).
-
-If the output folder lives inside an actively-syncing cloud drive
-(Nextcloud, Dropbox, ...), be aware the sync client can race a fresh write
-and revert it to an older version within seconds — verify the result a
-moment after writing, or write to a local, unsynced path first if that
-happens.
-
----
-
-## Comic archive packaging
-
-`tools/images_to_cbr.py` and `tools/cbr_to_images.py` package and unpack
-`.cbr`/`.cbz` comic archives.
-
-### tools/images_to_cbr.py
-
-Packages a folder of images into a `.cbr` file, which is a ZIP archive renamed for comic book readers.
-
-By default, images are added exactly as they are. Optional flags can convert images to JPEG and resize tall images before they are written into the archive.
-
-#### How it works
-
-- If the target folder contains subfolders, each subfolder is packaged into its own `.cbr` file saved in the target folder.
-- If the target folder contains images directly and no subfolders, the folder is packaged into a single `.cbr` saved in the parent folder.
-- Existing `.cbr` files are skipped unless `--overwrite` is passed.
-
-Supported image formats: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`, `.tiff`, `.tif`
-
-#### Requirements
-
-- Python 3.10+
-- Standard library only for as-is packing
-- [Pillow](https://pillow.readthedocs.io/) when using `--convert-jpeg` or `--max-height`
-
-```
-pip install pillow
-```
-
-#### Usage
-
-```
-python tools/images_to_cbr.py <folder> [--convert-jpeg] [--max-height <pixels>] [--quality <number>] [--overwrite]
-```
-
-| Flag                 | Description                                         | Default |
-| -------------------- | --------------------------------------------------- | ------- |
-| `--convert-jpeg`     | Convert all images to JPEG before packaging         | Off     |
-| `--max-height <px>`  | Resize images taller than this height; outputs JPEG | Off     |
-| `--quality <number>` | JPEG quality for converted or resized images, 1-100 | `90`    |
-| `--overwrite`        | Replace existing `.cbr` files                       | Off     |
-
-#### Examples
-
-Pack each subfolder of a directory into its own CBR:
-
-```
-python tools/images_to_cbr.py "/path/to/comics"
-```
-
-Pack all images in one folder into one CBR:
-
-```
-python tools/images_to_cbr.py "/path/to/chapter1"
-```
-
-Convert to JPEG and resize images taller than 2500 pixels:
-
-```
-python tools/images_to_cbr.py "/path/to/chapter1" --convert-jpeg --max-height 2500
-```
-
-### tools/cbr_to_images.py
-
-Extracts `.cbr`, `.cbz`, and `.zip` comic book archives into image folders.
-
-The script detects whether each archive is ZIP-based or RAR-based, then extracts it into a folder with the same base name without renaming the original archive.
-
-#### How it works
-
-- Scans only the target folder itself for `.cbr`, `.cbz`, and `.zip` files.
-- Extracts each archive into a sibling folder with the same base name.
-- If an output folder already exists, a numeric suffix is added, such as `Comic (1)`.
-- If extraction fails, the partially created output folder is removed.
-- ZIP-based archives are extracted with Python's standard library.
-- RAR-based `.cbr` files are extracted with WinRAR, UnRAR, or 7-Zip when one is installed or available on `PATH`.
-- `.zip` files are included so a previously renamed archive can still be extracted.
-
-Example:
-
-```
-/path/to/comics/Chapter 01.cbr -> /path/to/comics/Chapter 01/...
-```
-
-#### Requirements
-
-- Python 3.10+
-- Standard library only for ZIP-based `.cbz` files
-- WinRAR, UnRAR, or 7-Zip for RAR-based `.cbr` files
-
-#### Usage
-
-```
-python tools/cbr_to_images.py <folder> [--dry-run] [--first-only]
-```
-
-| Flag           | Description                                                                   | Default |
-| -------------- | ----------------------------------------------------------------------------- | ------- |
-| `--dry-run`    | Show planned extractions without changing files                               | Off     |
-| `--first-only` | Extract only the first image from each archive and save it to the same folder | Off     |
-
-#### Examples
-
-Extract all CBR/CBZ archives in a folder:
-
-```
-python tools/cbr_to_images.py "/path/to/comics"
-```
-
-Preview what would happen first:
-
-```
-python tools/cbr_to_images.py "/path/to/comics" --dry-run
-```
-
-Extract only the first image (cover) from every archive in the folder:
-
-```
-python tools/cbr_to_images.py "/path/to/comics" --first-only
-```
-
-Each archive produces one image file next to itself named `<archive stem>.<ext>` (e.g. `Chapter 01.cbr` → `Chapter 01.jpg`). Combine with `--dry-run` to preview which files would be created.
-
----
-
-## PDF & PSD conversion
-
-`tools/pdf_to_images.py` and `tools/psd_to_jpg.py` convert between PDF/PSD
-source files and plain images.
-
-### tools/pdf_to_images.py
-
-Extracts PDF pages as JPG images.
-
-#### How it works
-
-For each PDF found in the target folder, the script renders every page as a JPG image at the requested DPI.
-After rendering, it checks that the extracted JPG count matches the PDF page count.
-
-By default, each PDF gets its own output folder:
-
-```
-/path/to/pdfs/Comic.pdf -> /path/to/pdfs/Comic/0001.jpg
-```
-
-With `--single-folder`, every PDF is extracted into one shared folder, and output filenames include the PDF name:
-
-```
-/path/to/pdfs/pdfs/Comic_0001.jpg
-```
-
-#### Requirements
-
-- Python 3.7+
-- [PyMuPDF](https://pymupdf.readthedocs.io/)
-
-```
-pip install pymupdf
-```
-
-#### Usage
-
-```
-python tools/pdf_to_images.py <folder> [--dpi <number>] [--overwrite] [--single-folder] [--output <folder>]
-```
-
-If you omit the folder path, the script will prompt you to enter it.
-
-| Flag                | Description                                             | Default                  |
-| ------------------- | ------------------------------------------------------- | ------------------------ |
-| `--dpi <number>`    | Rendering resolution in DPI                             | `150`                    |
-| `--overwrite`       | Replace existing output folders                         | Off                      |
-| `--single-folder`   | Extract all PDFs into one shared image folder           | Off                      |
-| `--output <folder>` | Shared output folder; only valid with `--single-folder` | `<folder>/<folder_name>` |
-
-#### Examples
-
-Extract each PDF into its own folder:
-
-```
-python tools/pdf_to_images.py "/path/to/pdfs"
-```
-
-Extract at higher resolution:
-
-```
-python tools/pdf_to_images.py "/path/to/pdfs" --dpi 300
-```
-
-Extract all PDFs into one folder:
-
-```
-python tools/pdf_to_images.py "/path/to/pdfs" --single-folder
-```
-
-Extract all PDFs into a specific folder:
-
-```
-python tools/pdf_to_images.py "/path/to/pdfs" --single-folder --output "/path/to/all-images"
-```
-
-To turn extracted images into CBR files, run `tools/images_to_cbr.py` on the folder that contains the image folders.
-
-### tools/psd_to_jpg.py
-
-Converts Photoshop `.psd` and `.psb` files into high-quality `.jpg` files without changing their pixel dimensions.
-
-#### How it works
-
-- Scans the source folder recursively for `.psd` and `.psb` files.
-- Saves JPG files into a separate output folder while preserving the source folder structure.
-- Uses the flattened PSD/PSB composite image; it does not export individual layers.
-- With `--show-all-layers`, ignores the saved composite and instead recomposites the file with every layer and group forced visible, using `psd-tools`.
-- Transparent images are flattened against a matte background color before saving as JPG.
-- Existing JPG files are skipped when they are newer than the source file unless `--overwrite` is passed.
-
-If no output folder is provided, JPG files are written to a sibling folder named `<source folder> JPG`.
-
-#### Requirements
-
-- Python 3.10+
-- [Pillow](https://pillow.readthedocs.io/)
-- [psd-tools](https://psd-tools.readthedocs.io/) with the `composite` extras, only needed for `--show-all-layers`
-
-```
-pip install pillow
-pip install "psd-tools[composite]"
-```
-
-#### Usage
-
-```
-python tools/psd_to_jpg.py <source> [--output <folder>] [--background <color>] [--overwrite] [--show-all-layers] [--limit <number>]
-```
-
-| Flag                   | Description                                                                  | Default               |
-| ---------------------- | ---------------------------------------------------------------------------- | --------------------- |
-| `source`               | Folder to scan recursively for PSD/PSB files                                 | Required              |
-| `-o`, `--output <dir>` | Output folder for generated JPG files                                        | `<source folder> JPG` |
-| `--background <color>` | Matte color used when flattening transparent files                           | `white`               |
-| `--overwrite`          | Replace JPGs even when they are newer than the source PSD/PSB                | Off                   |
-| `--show-all-layers`    | Force every layer and group visible before flattening (requires `psd-tools`) | Off                   |
-| `--limit <number>`     | Convert only the first N files, useful for testing                           | `0` / no limit        |
-
-#### Examples
-
-Convert a specific folder:
-
-```
-python tools/psd_to_jpg.py "/path/to/psd-files"
-```
-
-Write JPG files to a specific output folder:
-
-```
-python tools/psd_to_jpg.py "/path/to/psd-files" --output "/path/to/jpg-output"
-```
-
-Flatten transparent images against a black background:
-
-```
-python tools/psd_to_jpg.py "/path/to/psd-files" --background black
-```
-
-Render with hidden layers and groups forced visible:
-
-```
-python tools/psd_to_jpg.py "/path/to/psd-files" --show-all-layers
-```
-
-Test with only the first five PSD/PSB files:
-
-```
-python tools/psd_to_jpg.py "/path/to/psd-files" --limit 5
-```
-
----
-
-## Image utilities
-
-`tools/rotate_images.py` and `tools/stretch_pngs.py` are small single-purpose
-image transforms.
-
-### tools/rotate_images.py
-
-Rotates all images in a folder by a specified number of degrees, overwriting the originals in place.
-
-#### Requirements
-
-- Python 3.7+
-- [Pillow](https://pillow.readthedocs.io/)
-
-```
-pip install pillow
-```
-
-#### Usage
-
-```
-python tools/rotate_images.py <folder> [degrees]
-```
-
-`degrees` defaults to `90` if not specified.
-
-#### Examples
-
-Rotate all images 90 degrees clockwise:
-
-```
-python tools/rotate_images.py "/path/to/images"
-```
-
-Rotate all images 180 degrees:
-
-```
-python tools/rotate_images.py "/path/to/images" 180
-```
-
-#### Notes
-
-- Images are overwritten in place. Make a backup first if needed.
-- Supported formats: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tiff`, `.webp`
-
-### tools/stretch_pngs.py
-
-Stretches every PNG image in a folder to an exact width and height. The resized images are saved in an `output` subfolder, leaving the originals unchanged.
-
-#### Requirements
-
-- Python 3.7+
-- [Pillow](https://pillow.readthedocs.io/)
-
-```
-pip install pillow
-```
-
-#### Usage
-
-```
-python tools/stretch_pngs.py <folder> <width> <height>
-```
-
-- `folder`: folder containing the PNG images
-- `width`: target width in pixels
-- `height`: target height in pixels
-
-#### Examples
-
-Stretch all PNG files to 1920 x 1080 pixels:
-
-```
-python tools/stretch_pngs.py "/path/to/images" 1920 1080
-```
-
-Stretch all PNG files to 800 x 1200 pixels:
-
-```
-python tools/stretch_pngs.py "/path/to/images" 800 1200
-```
-
-#### Notes
-
-- Only PNG files directly inside the specified folder are processed; subfolders are not scanned.
-- The aspect ratio is not preserved. Each image is stretched to the exact dimensions provided.
-- Output is written to `<folder>/output` using the original filenames. Existing files with the same names are overwritten.
-- Images are resized with Pillow's high-quality LANCZOS resampling filter.
-
----
-
-## Japanese OCR & translation
-
-`tools/transcribe_japanese_images.py` and `tools/translate_japanese_texts_ptbr.py`
-form a Japanese OCR + Portuguese translation pipeline for manga/novel page
-scans: the first produces a block-organized transcription, and the second
-translates it, keeping the same block structure so each translated block
-still maps back to its source image.
-
-### tools/transcribe_japanese_images.py
-
-Transcribes Japanese text from every image in a folder into a UTF-8 `.txt` file.
-
-The output is organized in blocks. Each block starts with the original image filename, so it is easy to review or translate page by page.
-
-Example output block:
-
-```
-## 10-11.jpg
-
-Japanese OCR text for this image...
-
----
-```
-
-#### How it works
-
-- Scans only the target folder itself for supported image files.
-- Sorts image filenames naturally, so `2-3.jpg` comes before `10-11.jpg`.
-- Uses Tesseract OCR with Japanese language data.
-- Defaults to `jpn_vert+jpn` and `--psm 5`, which works better for many vertical Japanese novel scans.
-- Downscales very large images before OCR so oversized scans do not stall processing.
-- Writes one text block per original image file.
-- Caches each image OCR result next to the output file, so reruns are faster.
-
-Supported image formats: `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, `.bmp`, `.webp`
-
-#### Requirements
-
-- Python 3.10+ with [Pillow](https://pillow.readthedocs.io/) (already in `venv/` if you ran `setup.sh`)
-- Tesseract OCR binary on `PATH` (`sudo apt install tesseract-ocr`)
-- Japanese Tesseract data: `jpn.traineddata` and `jpn_vert.traineddata` — `setup.sh` downloads both into `tools/tessdata/`, which the script uses automatically
-
-#### Usage
-
-```
-python tools/transcribe_japanese_images.py <folder> [--output <txt>] [--lang <langs>] [--psm <number>] [--max-side <pixels>] [--ocr-timeout <seconds>] [--no-cache]
-```
-
-| Flag                      | Description                                                   | Default                               |
-| ------------------------- | ------------------------------------------------------------- | ------------------------------------- |
-| `--output`, `-o <txt>`    | Output TXT file                                               | `<folder>/japanese_transcription.txt` |
-| `--tesseract <path>`      | Full path to the tesseract binary                             | Auto-detected on `PATH`               |
-| `--tessdata-dir <folder>` | Folder containing Tesseract language data                     | `tools/tessdata`                      |
-| `--lang <langs>`          | Tesseract OCR language setting                                | `jpn_vert+jpn`                        |
-| `--psm <number>`          | Tesseract page segmentation mode                              | `5`                                   |
-| `--max-side <pixels>`     | Resize images larger than this on the longest side before OCR | `4000`                                |
-| `--ocr-timeout <seconds>` | Maximum OCR time for one image                                | `240`                                 |
-| `--no-cache`              | Disable per-image OCR cache                                   | Off                                   |
-
-#### Examples
-
-Transcribe all images in a folder:
-
-```
-python tools/transcribe_japanese_images.py "/path/to/images"
-```
-
-Write the transcription to a specific file:
-
-```
-python tools/transcribe_japanese_images.py "/path/to/images" --output "/path/to/japanese_text.txt"
-```
-
-Try horizontal Japanese OCR instead of vertical OCR:
-
-```
-python tools/transcribe_japanese_images.py "/path/to/images" --lang jpn --psm 6
-```
-
-### tools/translate_japanese_texts_ptbr.py
-
-Translates a block-organized Japanese transcription `.txt` file into Brazilian Portuguese.
-
-It expects the input file generated by `transcribe_japanese_images.py`, keeps the same block structure, and writes a new `.txt` file where each block is still identified by the original image filename.
-
-#### How it works
-
-- Reads blocks that start with `## image-name.jpg`.
-- Translates each image block separately.
-- Keeps the original image filename as the block heading.
-- Writes UTF-8 text with the same `---` separator between blocks.
-- Caches each translated block next to the output file, so reruns are faster.
-
-#### Requirements
-
-- Python 3.10+
-- [deep-translator](https://pypi.org/project/deep-translator/) (already in `venv/` if you ran `setup.sh`, otherwise `pip install deep-translator`)
-- Internet access for Google Translate requests
-
-#### Usage
-
-```
-python tools/translate_japanese_texts_ptbr.py <japanese_txt> [--output <txt>] [--source <lang>] [--target <lang>] [--no-cache]
-```
-
-| Flag                   | Description                         | Default                  |
-| ---------------------- | ----------------------------------- | ------------------------ |
-| `--output`, `-o <txt>` | Output translated TXT file          | `<input_stem>_pt_br.txt` |
-| `--source <lang>`      | Source language for translation     | `ja`                     |
-| `--target <lang>`      | Target language for translation     | `pt`                     |
-| `--no-cache`           | Disable per-block translation cache | Off                      |
-
-#### Examples
-
-Translate the default transcription file:
-
-```
-python tools/translate_japanese_texts_ptbr.py "/path/to/images/japanese_transcription.txt"
-```
-
-Write the translation to a specific file:
-
-```
-python tools/translate_japanese_texts_ptbr.py "/path/to/japanese_text.txt" --output "/path/to/portuguese_pt_br.txt"
-```
-
----
+# comic-ai-tools
+
+Diego's agent skills for making and working with comics and manga: an AI
+comic studio (page scripts → AI-generated pages → `.cbz`), manga scans →
+letter-ready or PT-BR-translated layered PSD/XCF files, a pattern-based
+page downloader, and small CLI skills for comic archives, PDF/PSD
+conversion, image batches and Japanese OCR.
+
+> These skills are tailored to this machine (flatpak GIMP 3, a Higgsfield
+> Plus subscription, Brazilian Portuguese as the target language). Treat them
+> as examples and adapt rather than reuse verbatim.
 
 ## Layout
 
+Flat, one directory per skill:
+
 ```
-SKILL.md                        manga-letterer skill instructions (workflow, job format)
-scripts/detect_text.py          text detection + erase -> cleaned page, mask, overlay, JSON
-scripts/gimp_clean.py           GIMP 3 batch script -> raster layer assembly, PSD export (fixed pipeline)
-scripts/gimp_base_psd.py        GIMP 3 batch script -> base 2-layer PSD, no cleaning (image_to_psd.py)
-scripts/gimp_export_layer.py    GIMP 3 batch script -> exports one named PSD layer to PNG
-scripts/detect_or_reuse.py      shared helper: reuse a previous detect_text.py run or generate one
-scripts/image_to_psd.py         CLI: folder/image -> base PSD (Original + Copy)
-scripts/add_cleaned_layer.py    CLI: folder/PSD -> copy with a new Cleaned layer appended
-scripts/add_cleaned_layer.mjs   ag-psd script -> appends a raster layer to an existing PSD
-scripts/add_text_boxes.py       CLI: folder/PSD -> native Photoshop paragraph text layers appended
-scripts/add_text_layers.mjs     ag-psd script -> native Photoshop paragraph text layers (also used by the fixed pipeline)
-setup.sh                        creates venv + node_modules, installs deps, downloads the ONNX model + tessdata
-models/, venv/, node_modules/   created by setup.sh (not committed)
-tools/                          comic archive packaging, PDF/PSD conversion, image utilities, and Japanese OCR/translation scripts
-tools/tessdata/                 Japanese Tesseract language data, downloaded by setup.sh (not committed)
-pipeline/                       AI comic studio: split scripts, generate pages, lettering guide, .cbz assembly
-_template/                      template for starting a new AI comic project (copy to projects/<name>/)
-projects/                       AI comic projects (scripts, refs, renders, .cbz output — not committed)
-.claude/skills/, .agents/       gerar-paginas + Higgsfield skills used by the AI comic studio
-skills-lock.json                Higgsfield skills lockfile
+<skill>/SKILL.md      what the agent reads (workflow, how to pick flags from the request)
+<skill>/README.md     human overview, only where the skill is big enough to need one
+<skill>/scripts/      every script that skill runs (nothing lives outside its skill)
+<skill>/setup.sh      that skill's own setup (models, tessdata, node_modules, tool checks), if it needs any
+<skill>/examples/, _template/, sites/, models/, tessdata/   skill-owned assets (the last two are downloaded by setup.sh, not committed)
 ```
 
-## Translated PSDs from raw images (manga-translator-ptbr, mode B)
+The only shared, machine-generated piece at the repo root is `venv/` (Python
+deps for every skill), created by **`./setup.sh`**, which then runs every
+`<skill>/setup.sh`. Everything else a skill needs lives inside it: `node_modules/` from its own
+`package.json` (`manga-translator-ptbr`, `comic-downloader`),
+`manga-translator-ptbr/models/`, `japanese-ocr-translate/tessdata/` (all
+installed by `setup.sh`) and the comic projects in `gerar-paginas/projects/`
+— all gitignored by the root `.gitignore`. All commands in the skills are
+written relative to the repo root.
 
-`scripts/detect_blocks.py` (tiled comic-text-detector, any scan size) ->
-`<stem>_manual.json` fixes -> `scripts/merge_translations.py` ->
-`scripts/build_translated_psd.mjs` (Original + Copy + one PT-BR paragraph
-text box per block, rotations supported) -> `scripts/verify_translated_psd.mjs`
-/ `scripts/preview_psd_text.py`. Review aids: `scripts/overlay_tiles.py`,
-`scripts/block_sheets.py`. Full workflow in
-`.claude/skills/manga-translator-ptbr/SKILL.md`.
+## Skills
 
-Note: both ONNX scripts now enable onnxruntime denormal-as-zero - the
-comictextdetector model is ~60x slower without it (90 s vs 1.4 s per tile).
+| Skill | Scripts | What it does |
+| --- | --- | --- |
+| [`gerar-paginas`](gerar-paginas/) ([README](gerar-paginas/README.md)) | `split_scripts.py`, `status.py`, `make_lettering_guide.py`, `assemble_cbz.py`, `common.py`, `gen_page.py`, `batch_gen.sh`, `_template/` | AI comic studio: splits per-issue prompt scripts into page jobs, drives Higgsfield (`gpt_image_2_5`, ~2 credits/page) page by page with visual QC + reroll loop, writes the lettering guide, packs approved pages into `.cbz`. One project per `gerar-paginas/projects/<name>/` (currently `megaman-nam`). |
+| [`manga-translator-ptbr`](manga-translator-ptbr/) ([README](manga-translator-ptbr/README.md)) | `detect_text.py`, `inpaint_lama.py`, `detect_blocks.py`, `merge_columns.py`, `overlay_tiles.py`, `block_sheets.py`, `page_views.py`, `assemble_translation.py`, `merge_translations.py`, `clean_blocks.py`, `ensure_upright.py`, `build_translated_psd.mjs`, `build_translated_xcf.py`, `gimp_xcf_job.py`, `verify_translated_psd.mjs`, `validate_psds.mjs`, `preview_psd_text.py`, `build_two_source_psd.mjs`, `list_layers.mjs`, `list_text_layers.mjs`, `export_layer.mjs`, `set_text_layers.mjs`, `add_and_fill_text_layers.mjs`, `scan_placeholders.mjs`, `annotate_text_boxes.py`, `run_letter_round.sh`, `run_detect_round.sh`, `run_build_round.sh`, `run_apply_round.sh`, `examples/` | Manga/doujinshi/art-book scans → layered PSDs (Photoshop text boxes) or XCFs (native GIMP text layers, via headless GIMP): `Original` + `Copy` with the text erased (solid fill on plain backgrounds, LaMa inpainting over art) + one editable Photoshop paragraph text box per block. Mode C leaves "Lorem ipsum" in CCWildWords for a human letterer, fully automatic. Mode B (any scan size, tiled detection for 7000×10000 pages with tiny print) has the agent review the boxes, merge Japanese columns into paragraphs and write the Brazilian Portuguese itself. Mode A fills the placeholder boxes of existing PSDs. ONNX detection + ag-psd; GIMP only for XCF output. |
+| [`comic-downloader`](comic-downloader/) ([README](comic-downloader/README.md)) | `download.cjs`, `sites/<name>/download.config.json` | Downloads comic/magazine page images whose URLs follow a pattern (numbered pages, issues with dates, galleries, URL lists) from JSON site profiles; dry-run first, skips existing files. Bundled profile: Dorothee Magazine. |
+| [`comic-archive`](comic-archive/) | `images_to_cbr.py`, `cbr_to_images.py` | Pack image folders into `.cbr`/`.cbz` (optional JPEG conversion, max height, quality) and unpack `.cbr`/`.cbz`/`.zip` archives (RAR via unrar/7z; `--first-only` for covers). The SKILL.md maps what the user asks for to the flags. |
+| [`pdf-psd-convert`](pdf-psd-convert/) | `pdf_to_images.py`, `psd_to_jpg.py` | PDF pages → JPG at any DPI (one folder per PDF or one shared folder); `.psd`/`.psb` → JPG recursively, keeping folder structure, with matte color and an optional all-layers-visible render. |
+| [`image-utils`](image-utils/) | `rotate_images.py`, `stretch_pngs.py` | Rotate every image in a folder in place by N degrees; stretch every PNG to exact W×H into `output/`. |
+| [`japanese-ocr-translate`](japanese-ocr-translate/) | `transcribe_japanese_images.py`, `translate_japanese_texts_ptbr.py`, `tessdata/` | Tesseract OCR of a folder of Japanese scans into one block-per-page TXT, then Google-translate it to PT-BR keeping the blocks — a rough reading pass, not lettering. |
+
+Each `SKILL.md` documents the scripts' flags and, for the CLI skills, a table
+of "what the user says → which flags to pass".
+
+## Consumers
+
+Each harness's `skills/` directory in this repo is a real directory whose
+entries are symlinks into the skill folders, so one edit reaches all of them:
+
+| Harness | Skills directory | How it links |
+| --- | --- | --- |
+| Claude Code | `.claude/skills/` | per-skill symlinks → `../../<skill>` (own skills) and → `../../.agents/skills/higgsfield-*` (vendored) |
+| Codex / shared | `.agents/skills/` | per-skill symlinks → `../../<skill>`, plus the vendored `higgsfield-*` skills as real directories |
+| both | `CLAUDE.md`, `AGENTS.md` | `AGENTS.md` is a symlink to `CLAUDE.md`; the text is harness-neutral |
+
+The skills are project-scoped: they load when an agent is started inside
+this repo. To use them from anywhere, symlink the skill folders into the
+global directories, the same way:
+
+```sh
+for s in gerar-paginas manga-translator-ptbr comic-downloader comic-archive pdf-psd-convert image-utils japanese-ocr-translate; do
+  for h in ~/.claude/skills ~/.agents/skills ~/.codex/skills; do
+    mkdir -p "$h" && ln -sfn ~/Projects/comic-ai-tools/$s "$h/$s"
+  done
+done
+```
+
+Harnesses read `SKILL.md` at startup, so restart a running agent to pick up
+a newly added skill.
+
+## External components
+
+| Component | Source | Where it lives | Update procedure |
+| --- | --- | --- | --- |
+| `higgsfield-*` skills (brandkit, generate, marketplace-cards, product-photoshoot, soul-id, video-explainer, websites, youtube-thumbnail) | [higgsfield-ai/skills](https://github.com/higgsfield-ai/skills) via `npx skills add higgsfield-ai/skills` | `.agents/skills/higgsfield-*/` (real dirs, tracked in `skills-lock.json`), symlinked from `.claude/skills/` | `npx skills add higgsfield-ai/skills` again; never edit them here |
+| Higgsfield CLI | npm `@higgsfield/cli` | global npm | `npm i -g @higgsfield/cli`, then `higgsfield auth login` |
+| comic-text-detector model | [manga-image-translator release beta-0.3](https://github.com/zyddnys/manga-image-translator/releases/tag/beta-0.3) | `manga-translator-ptbr/models/comictextdetector.pt.onnx` | `manga-translator-ptbr/setup.sh` re-downloads if missing |
+| LaMa inpainting model | [Carve/LaMa-ONNX](https://huggingface.co/Carve/LaMa-ONNX) | `manga-translator-ptbr/models/lama_fp32.onnx` | `manga-translator-ptbr/setup.sh` |
+| Japanese Tesseract data | [tesseract-ocr/tessdata](https://github.com/tesseract-ocr/tessdata) | `japanese-ocr-translate/tessdata/` | `japanese-ocr-translate/setup.sh` |
+| ag-psd, canvas, pngjs | npm (`manga-translator-ptbr/package.json`) | `manga-translator-ptbr/node_modules/` | `<skill>/setup.sh` (npm install) |
+| axios | npm (`comic-downloader/package.json`) | `comic-downloader/node_modules/` | `<skill>/setup.sh` (npm install) |
+
+## Setup
+
+```bash
+git clone <this repo> ~/Projects/comic-ai-tools
+cd ~/Projects/comic-ai-tools
+./setup.sh     # shared venv + python deps, then every <skill>/setup.sh (node_modules, ONNX models, tessdata, GIMP/tesseract checks)
+```
+
+System requirements, by skill:
+
+- `manga-translator-ptbr`: Python 3.10+, Node.js + npm, ~300 MB for the
+  two models (in the skill's `models/`). [flatpak GIMP 3](https://flathub.org/apps/org.gimp.GIMP) only
+  for XCF output. The `CCWildWords-Regular` font on the machine that opens
+  the files in Photoshop/GIMP.
+- `comic-downloader`: Node.js only.
+- `gerar-paginas`: the Higgsfield CLI logged in to a Higgsfield account
+  (Plus plan, 1000 credits/month).
+- `japanese-ocr-translate`: `tesseract` on `PATH` (`sudo apt install tesseract-ocr`).
+- `comic-archive`: `unrar` or `7z` only for RAR-based `.cbr` files.
+
+## Rules
+
+`.gitignore` blocks `venv/`, every `node_modules/` and `package-lock.json`,
+`manga-translator-ptbr/models/`, `japanese-ocr-translate/tessdata/`,
+`gerar-paginas/projects/`, `comic-downloader/downloads/`, `tmp_worklists/`
+and `__pycache__/`. Generated comics, scans, downloads, PSDs and per-job
+scratch never go in the repo.
+
+Output folders inside a syncing cloud drive (Nextcloud, Dropbox) can race a
+fresh PSD write and revert it within seconds — verify a moment after
+writing, or write to a local path first.

@@ -1,65 +1,27 @@
 #!/usr/bin/env bash
-# One-time setup: creates the Python venv and downloads the text-detection model.
+# One-time setup for the whole repo. Safe to re-run.
+#   1. creates the shared Python venv (<repo>/venv) with the deps of every
+#      Python skill - the only piece that lives at the repo root;
+#   2. runs <skill>/setup.sh for every skill that has one (models, tessdata,
+#      node_modules, tool checks). Each of those can also be run on its own.
 set -euo pipefail
 cd "$(dirname "$0")"
-
-MODEL_URL="https://github.com/zyddnys/manga-image-translator/releases/download/beta-0.3/comictextdetector.pt.onnx"
-MODEL_PATH="models/comictextdetector.pt.onnx"
-
-TESSDATA_DIR="tools/tessdata"
-TESSDATA_BASE_URL="https://github.com/tesseract-ocr/tessdata/raw/main"
-TESSDATA_FILES="jpn.traineddata jpn_vert.traineddata"
 
 if [ ! -d venv ]; then
     echo "Creating venv..."
     python3 -m venv venv
     venv/bin/pip install --quiet --upgrade pip
 fi
+# manga-translator-ptbr: onnxruntime opencv numpy pillow | pdf-psd-convert: pymupdf psd-tools pillow
+# japanese-ocr-translate: pillow deep-translator | gerar-paginas, image-utils, comic-archive: pillow
 venv/bin/pip install --quiet onnxruntime opencv-python-headless numpy \
     pillow pymupdf "psd-tools[composite]" deep-translator
 echo "venv ready: $(venv/bin/python -c 'import onnxruntime; print("onnxruntime", onnxruntime.__version__)')"
 
-if [ ! -f "$MODEL_PATH" ]; then
-    echo "Downloading text-detection model (~95 MB)..."
-    mkdir -p models
-    curl -L --fail -o "$MODEL_PATH" "$MODEL_URL"
-fi
-echo "model ready: $MODEL_PATH"
-
-# LaMa inpainting model ("generative fill" for text erased over art; solid
-# backgrounds never use it). ONNX export, Apache-2.0, runs on CPU.
-LAMA_URL="https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx"
-LAMA_PATH="models/lama_fp32.onnx"
-if [ ! -f "$LAMA_PATH" ]; then
-    echo "Downloading LaMa inpainting model (~208 MB)..."
-    curl -L --fail -o "$LAMA_PATH" "$LAMA_URL"
-fi
-echo "inpainting model ready: $LAMA_PATH"
-
-mkdir -p "$TESSDATA_DIR"
-for f in $TESSDATA_FILES; do
-    if [ ! -f "$TESSDATA_DIR/$f" ]; then
-        echo "Downloading Tesseract language data ($f, ~15 MB)..."
-        curl -L --fail -o "$TESSDATA_DIR/$f" "$TESSDATA_BASE_URL/$f"
-    fi
+for s in */setup.sh; do
+    [ "$s" = "*/setup.sh" ] && break
+    echo "== ${s%/setup.sh} =="
+    bash "$s"
 done
-echo "tessdata ready: $TESSDATA_DIR"
-
-if ! flatpak info org.gimp.GIMP >/dev/null 2>&1; then
-    echo "WARNING: flatpak GIMP (org.gimp.GIMP) not found - install it to use this skill."
-    echo "  flatpak install flathub org.gimp.GIMP"
-fi
-
-if ! command -v tesseract >/dev/null 2>&1; then
-    echo "WARNING: tesseract binary not found - install it to use the Japanese OCR tool."
-    echo "  sudo apt install tesseract-ocr"
-fi
-
-if command -v npm >/dev/null 2>&1; then
-    npm install --silent
-    echo "node_modules ready: ag-psd $(node -p "require('./node_modules/ag-psd/package.json').version")"
-else
-    echo "WARNING: npm not found - install Node.js to enable add_text_layers.mjs (Photoshop text-layer step)."
-fi
 
 echo "Setup complete."

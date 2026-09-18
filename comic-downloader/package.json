@@ -1,0 +1,8 @@
+{
+  "name": "comic-downloader",
+  "private": true,
+  "description": "Node deps for scripts/download.cjs (axios HTTP client).",
+  "dependencies": {
+    "axios": "^1.9.0"
+  }
+}

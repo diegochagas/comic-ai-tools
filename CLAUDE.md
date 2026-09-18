@@ -1,62 +1,61 @@
 # comic-ai-tools
 
-Two independent halves in one repo:
+One skill per top-level folder (`<skill>/SKILL.md` + `<skill>/scripts/`),
+harness-neutral: this file is read as `CLAUDE.md` (Claude Code) and, through
+a symlink, as `AGENTS.md` (Codex). The README's table lists every skill and
+its scripts; read a skill's `SKILL.md` before running any of its scripts.
 
-1. **AI comic studio** (`pipeline/`, `_template/`, `projects/`) — generic
-   pipeline for generating full comic issues with AI and packing them as
-   .cbz. Supports multiple comic projects; each one lives in
-   `projects/<name>/` with its own scripts, model sheets, style refs and
-   rules. Everything below is about this half.
-2. **Comic archive / lettering tools** (`SKILL.md`, `scripts/`, `tools/`) —
-   the manga-letterer PSD lettering-prep pipeline plus standalone CLI tools
-   for CBR/CBZ packaging, PDF/PSD conversion, image utilities and Japanese
-   OCR/translation. See the README for docs; `setup.sh` creates its
-   venv/model/node_modules. Translating raw images/PSDs to PT-BR (text
-   detection -> Original+Copy PSD -> translated Photoshop text boxes) is the
-   `manga-translator-ptbr` skill in `.claude/skills/`.
+Skills: `gerar-paginas` (AI comic studio), `manga-translator-ptbr` (scans →
+letter-ready or PT-BR translated PSD/XCF files), `comic-downloader`
+(pattern-based page downloads from JSON site profiles), `comic-archive`, `pdf-psd-convert`, `image-utils`, `japanese-ocr-translate`
+(CLI wrappers that pick flags from the request). `.claude/skills/` and
+`.agents/skills/` contain symlinks to those folders; the `higgsfield-*`
+entries there are vendored third-party skills (`skills-lock.json`) — never
+edit them.
 
-Current projects: `megaman-nam` (Novas Aventuras de Megaman 17–20 — see
-`projects/megaman-nam/PROJECT.md`).
+## Shared pieces at the repo root
 
-## Layout
+- Root `setup.sh` creates the shared `venv/` (Python deps for all skills)
+  and then runs each `<skill>/setup.sh`, which create the rest of what is
+  not committed inside the skills: `manga-translator-ptbr/node_modules/`
+  (ag-psd, canvas, pngjs; its package.json is `"type": "module"`),
+  `comic-downloader/node_modules/` (axios), `manga-translator-ptbr/models/`
+  (comic-text-detector + LaMa ONNX) and `japanese-ocr-translate/tessdata/`.
+  A skill that needs npm packages gets its own `package.json`; the root
+  `.gitignore` already ignores any `node_modules/` and `package-lock.json`.
+- All script paths in the skills are relative to the repo root; Python
+  scripts expect `venv/bin/python`. Scripts find `venv/` (repo root, two
+  levels up) and their skill's `projects/` / `models/` (one level up) from
+  their own location, so run them from anywhere but don't move them out of
+  `<skill>/scripts/`.
+- `manga-translator-ptbr` has three modes (C placeholder, B translate, A
+  fill) on one toolchain: `detect_text.py` / `inpaint_lama.py` are the
+  detector + inpainter every mode uses; `build_translated_psd.mjs` writes
+  PSDs and `build_translated_xcf.py` (headless flatpak GIMP, never with
+  `-f`) writes XCFs from the same blocks JSON (`--placeholder` for mode C). The
+  skill always runs its pipeline to the end and delivers PSDs; XCF only
+  when the request explicitly asks for GIMP files.
+- `gerar-paginas/projects/<name>/` (gitignored) holds each AI comic project:
+  `project.json`, `PROJECT.md`, `charmap.json`, `scripts_src/`, `refs/`,
+  `jobs/`, `work/`, `out/`. New projects start from `gerar-paginas/_template/`.
 
-- `pipeline/split_scripts.py` — per-issue script → `projects/<p>/jobs/<issue>/page_NN.json`.
-  Run with `-p <project>` (optional when only one project exists).
-- `pipeline/assemble_cbz.py` — approved pages → `projects/<p>/out/*.cbz`.
-- `pipeline/status.py` — progress report across projects.
-- `pipeline/make_lettering_guide.py` — per-issue lettering guide (which text
-  goes in which balloon) for projects with `"lettering": "manual"` — those
-  generate pages with EMPTY white balloons (correct shape/tail, zero text);
-  Diego letters them manually.
-- `pipeline/common.py` — project discovery/config.
-- `projects/<name>/` — one folder per comic:
-  - `project.json` — formats (issues, script pattern, page regex, aspect, cbz naming)
-  - `PROJECT.md` — everything specific to this comic (sources, style, QC rules, special pages)
-  - `charmap.json` — character keyword → model sheet mapping
-  - `scripts_src/` — the page-by-page prompt scripts (copied from the source of truth)
-  - `refs/model-sheets/`, `refs/style/` — reference images to attach to generations
-  - `jobs/`, `work/` (gen/approved/state.json), `out/`
-  - `projects/` itself is gitignored (generated scripts, refs, renders, .cbz
-    output) — nothing under it is version-controlled.
-- `_template/` (repo root, NOT under `projects/` — kept out so it stays
-  version-controlled) — copy this to `projects/<name>/` to start a new comic
-  project.
+## gerar-paginas cost rules (apply to every project)
 
-## How generation works
-
-Use the `/gerar-paginas` skill — it drives Higgsfield (CLI `higgsfield`,
-official skills in `.agents/skills/`) page by page with a visual QC + reroll
-loop. Claude Code is the orchestrator and QC reviewer; there is NO Claude API
-usage.
-
-Cost rules (apply to every project) — real credit costs, verified 2026-09-09:
-- Plus plan = 1000 credits/month. `gpt_image_2_5` at `quality low` /
-  `resolution 2k` = 2 credits/gen (default) — bump `--quality` to `medium`
-  (2.5) or `high` (5.5) only if a page keeps failing on text/detail fidelity.
-  `nano_banana_flash` = 1.5 (cheap layout-only reroll). NEVER `gpt_image_2`
-  (the older model, 7 credits) or video models. One issue ≈ 150 credits including rerolls.
+Real credit costs, verified 2026-09-09, Plus plan = 1000 credits/month:
+- `gpt_image_2_5` at `quality low` / `resolution 2k` = 2 credits/gen
+  (default) — bump `--quality` to `medium` (2.5) or `high` (5.5) only if a
+  page keeps failing on text/detail fidelity. `nano_banana_flash` = 1.5
+  (cheap layout-only reroll). NEVER `gpt_image_2` (the older model, 7
+  credits) or video models. One issue ≈ 150 credits including rerolls.
 - Max 3 generation attempts per page, then flag `needs_review` for Diego.
 - Check `higgsfield account status` before each batch; warn under 100 credits.
+- The agent is the orchestrator and QC reviewer; there is NO LLM API usage.
+- Project-specific rules (language, continuity, special pages) live in each
+  project's `PROJECT.md` — always read it before generating.
 
-Project-specific rules (language, continuity, special pages) live in each
-project's PROJECT.md — always read it before generating.
+## Conventions
+
+- Keep scripts inside their skill folder and document new ones in both the
+  skill's `SKILL.md` and the README table.
+- Don't commit generated content (scans, PSDs, renders, worklists); the
+  `.gitignore` already covers the usual folders.
